@@ -16,3 +16,17 @@ embedding.plot_embedding(
 
 
 
+############3
+cell_features = joblib.load("intermediate_data/cell_features.joblib")
+
+
+full_embedding = embedding.fit_embedding(
+    dataset=cell_features,
+    embed_dir="intermediate_data/full_embedding_pca20_umap2_100_0_euclid")
+
+embedding.plot_embedding(
+    embedding=full_embedding,
+    output_fname="product/figures/full_embedding_pca20_umap2_100_0_euclid.png")
+
+
+

@@ -1,32 +1,18 @@
 
-import numpy as np
 import pandas as pd
-import MPLearn as mpl
+import joblib
+from MPLearn import embedding
+
+cf10k = joblib.load("intermediate_data/cf10k.joblib")
 
 
-cell_features = pd.read_csv('input/cell_features.csv', sep=',')
-
-# split out the metadata for each cell
-cell_meta = cell_features[[
-    'Product Name',
-    'Metadata_PlateID',
-    'Metadata_WellID',
-    'Number_Object_Number',
-    'Concentration',
-    'Condition',
-    'Unique']]
-
-cell_features = cell_features[
-    [c for c in cell_features.columns if c not in cell_meta.columns]]
-# [1480149 rows x 200 columns]
-
-# random sample of 10k cells
-cf10k = cell_features.sample(10000)
-
-mpl.embedding.fit_embedding(
+cf10k_embedding = embedding.fit_embedding(
     dataset=cf10k,
-    embed_dir="cf10k_embedding_pca20_umap2_100_0_euclid")
+    embed_dir="intermediate_data/cf10k_embedding_pca20_umap2_100_0_euclid")
 
+embedding.plot_embedding(
+    embedding=cf10k_embedding,
+    output_fname="product/figures/cf10_embedding_pca20_umap2_100_0_euclid.png")
 
 
 

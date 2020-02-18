@@ -169,3 +169,21 @@ def plot_embedding(
     if background:
         canvas = set_background(canvas, background)
     canvas.to_pil().convert('RGB').save(output_fname)
+
+
+def plot_embedding_labels(
+    embedding,
+    output_fname,
+    plot_width=400,
+    plot_height=400,
+		cmap=fire,
+		shade_how='eq_hist',
+    background=""):
+    embedding = pd.DataFrame(data=embedding, columns = ["x", "y"])
+    canvas = datashader.Canvas(
+				plot_width=plot_width,
+        plot_height=plot_height).points(embedding, 'x', 'y')
+    canvas = datashader.transfer_functions.shade(canvas, how=shade_how, cmap=fire)
+    if background:
+        canvas = set_background(canvas, background)
+    canvas.to_pil().convert('RGB').save(output_fname)

@@ -24,6 +24,17 @@ install pre-requisite packages
    conda install setuptools pandas joblib scikit-learn umap-learn
    conda install -c conda-forge umap-learn datashader
 
+Note that `hdbscan` on conda-forge doesn't yet support python 3.8 so I had to build it from source
+
+   mkdir ~/opt/hdbscan
+   cd ~/opt/hdbscan
+   wget https://github.com/scikit-learn-contrib/hdbscan/archive/master.zip
+   unzip master.zip
+   rm master.zip
+   cd hdbscan-master
+   pip install -r requirements.txt
+   python setup.py install
+
 download and install MPLearn package
 
     git clone git@github.com:momeara/MPLearn.git

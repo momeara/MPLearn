@@ -1,9 +1,10 @@
 
-install_MPLearn_prereqs:
+install_prereqs:
 	conda install setuptools pandas joblib scikit-learn umap-learn
-	conda install -c conda-forge umap-learn datashader hbscan
+	conda install -c conda-forge umap-learn hbscan jupyterlab datashader holoviews
+	pip install nbdev
 
-install_MPLearn:
+install:
 	python setup.py install
 
 run_Steatosis2020_vignette:

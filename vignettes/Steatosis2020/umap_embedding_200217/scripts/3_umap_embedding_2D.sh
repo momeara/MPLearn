@@ -67,8 +67,18 @@ python scripts/umap_embedding.py \
        --dataset intermediate_data/cell_features_normed.joblib \
        --tag full_normed_embedding_pca20_umap2_spectral_30_0_euclid \
        --umap_n_neighbors 30 \
-       --umap_min_dist 0.1 \
+       --umap_min_dist 0.0 \
        --umap_init spectral
+
+
+python scripts/umap_embedding.py \
+       --dataset intermediate_data/cell_features_normed.joblib \
+       --tag full_normed_embedding_pca20_umap2_spectral_200_0_euclid \
+       --umap_n_neighbors 200 \
+       --umap_min_dist 0.0 \
+       --umap_init spectral
+
+
 
 # scan number of neighbors and minimum distance parameters
 # random initialization
@@ -91,9 +101,9 @@ done
 
 # scan number of neighbors and minimum distance parameters
 # spectral initialization
-for umap_n_neighbors in 3 10 30 100
+for umap_n_neighbors in 3 10 30 100 200
 do
-    for umap_min_dist in 0.0 0.1 0.25 0.5 0.8 0.99
+    for umap_min_dist in 0.0 0.1 0.25
     do
 	command="python scripts/umap_embedding.py \
                --dataset intermediate_data/cell_features_normed.joblib \

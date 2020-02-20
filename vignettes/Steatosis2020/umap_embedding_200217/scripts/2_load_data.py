@@ -2,6 +2,9 @@
 import pandas as pd
 from sklearn import preprocessing
 import joblib
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 
 print("Loading cell features from 'input/cell_features.csv' ...")
 cell_features = pd.read_csv('input/cell_features.csv', sep=',')
@@ -15,6 +18,10 @@ cell_meta = cell_features[[
     'Concentration',
     'Condition',
     'Unique']]
+
+pq.write_table(
+    pa.Table.from_pandas(cell_meta),
+    'intermediate_data/cell_meta.parquet')
 
 joblib.dump(
     value=cell_meta,
@@ -68,3 +75,11 @@ joblib.dump(
 joblib.dump(
     value=cell_features_normed,
     filename="intermediate_data/cell_features_normed.joblib")
+
+
+cell_features_pa = pa.Table.from_pandas(cell_features)
+pq.write_table(cell_features_pa, 'intermediate_data/cell_features.parquet')
+
+cell_features_pa2 = pq.read_table('intermediate_data/cell_features.parquet')
+cell_features2 = cell_features_pa2.to_pandas()
+

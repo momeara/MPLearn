@@ -5,6 +5,7 @@ import argparse
 import pandas as pd
 import joblib
 from MPLearn import embedding
+import hdbscan
 
 DESCRIPTION="""Do the embedding for one dataset with one set of parameters
 version 0.0.1

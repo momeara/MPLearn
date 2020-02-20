@@ -71,7 +71,7 @@ def main(argv):
         if arguments.verbose:
             print("Computing HBSCAN clusters ...")
         clusterer = hdbscan.HDBSCAN(min_cluster_size=3)
-        cluster_labels = full_clusterer.fit_predict(embedding)
+        cluster_labels = clusterer.fit_predict(embedding)
         joblib.dump(
             value=clusterer,
             filename="intermediate_data/{}/hdbscan_clusterer.joblib".format(arguments.tag))

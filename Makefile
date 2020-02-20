@@ -17,7 +17,6 @@ run_Steatosis2020_vignette:
 	python scripts/1_init.py
 	python scripts/2_load_data.py
 	./scripts/3_embed_umap_2D.sh
-	python scripts/4_cluster_hdbscan.py
 
 start_local_dask_cluster:
 	dask-scheduler --scheduler-file temp/scheduler.json &

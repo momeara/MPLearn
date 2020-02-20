@@ -63,6 +63,7 @@ done
 # embed full set of 1.4M cells #
 ################################
 # ~90 minutes
+# fewer neighbors is better for more local structure
 python scripts/umap_embedding.py \
        --dataset intermediate_data/cell_features_normed.joblib \
        --tag full_normed_embedding_pca20_umap2_spectral_30_0_euclid \
@@ -70,11 +71,21 @@ python scripts/umap_embedding.py \
        --umap_min_dist 0.0 \
        --umap_init spectral
 
-
+# more neighbors is better for more global structure
 python scripts/umap_embedding.py \
        --dataset intermediate_data/cell_features_normed.joblib \
        --tag full_normed_embedding_pca20_umap2_spectral_200_0_euclid \
        --umap_n_neighbors 200 \
+       --umap_min_dist 0.0 \
+       --umap_init spectral
+
+
+# more neighbors is better for more global structure
+python scripts/umap_embedding.py \
+       --dataset intermediate_data/cell_features_normed.joblib \
+       --tag full_normed_embedding_pca200_umap2_spectral_200_0_euclid \
+       --pca_n_components 200 \
+       --umap_n_neighbors 30 \
        --umap_min_dist 0.0 \
        --umap_init spectral
 

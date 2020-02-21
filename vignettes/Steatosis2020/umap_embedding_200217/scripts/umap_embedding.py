@@ -1,8 +1,11 @@
+# -*- tab-width:4;indent-tabs-mode:t;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
+# vi: set ts=2 noet:
 
 import sys
 import argparse
 
 import pandas as pd
+import pyarrow.parquet
 import pyarrow as pa
 import joblib
 from MPLearn import embedding
@@ -42,6 +45,9 @@ def main(argv):
         "--umap_init", type=str, action="store", dest="umap_init", default='spectral',
         help="""UMAP initialization. Spectral is prefered, but random is more robust""")
     parser.add_argument(
+        "--hbscan_min", type=int, action="store", dest="hbscan_min", default=100,
+        help="""HBSCAN min cluster size""")
+    parser.add_argument(
         "--compute_hdbscan_clusters", type=bool, action="store", dest="compute_hbscan_clusters", default=True,
         help="""Compute HBSCAN clusters and store in the tagged directory""")
     parser.add_argument(
@@ -53,7 +59,7 @@ def main(argv):
 
     arguments = parser.parse_args()
 
-    dataset = joblib.load(arguments.dataset)
+    dataset = pa.parquet.read_table(source=arguments.dataset).to_pandas()
 
     if arguments.verbose:
         print("Computing UMAP embedding clusters ...")    
@@ -82,10 +88,10 @@ def main(argv):
         cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
         joblib.dump(
             value=clusterer,
-            filename="intermediate_data/{}/hdbscan_clusterer.joblib".format(arguments.tag))
+            filename="intermediate_data/{}/hdbscan_clusterer_min{}.joblib".format(arguments.tag))
         pa.parquet.write_table(
             value=pa.Table.from_pandas(cluster_labels),
-            filename="intermediate_data/{}/hdbscan_cluster_labels.joblib".format(arguments.tag))
+            filename="intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hbscan_min))
 
 if __name__ == "__main__":
     main(sys.argv)

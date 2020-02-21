@@ -14,6 +14,13 @@ run_Steatosis2020_vignette:
 	#    intermediate_data/<embedding_tag> directory with embeddings and clusterings
 	#    product/figures/<embedding_tag>_embedding.png with images of the embeddings
 	cd vignettes/Steatosis2020/umap_embedding_202017
+	jupyter lab
+	# on local machine:
+	#   ssh -i "<ec2_instance_id>.pem" -NfL 8887:localhost:8888 ubuntu@<instance_url>
+	#      where <ec2_instance_id> is the Amazon EC2 .pem file
+	#      and <instance_url> is the IP or URL to the instance
+	#   natigate browser to localhost:8887
+	#   put in security token
 	python scripts/1_init.py
 	python scripts/2_load_data.py
 	./scripts/3_embed_umap_2D.sh
@@ -23,7 +30,6 @@ start_local_dask_cluster:
 	dask-worker --shceduler-file temp/scheduler.json &
 
 start_Steatosis2020_vignette_notebooks:
-	./vignettes/Steatosis2020/start_jupyter.sh
 	# note the secret token
 	# on local machine:
 	#   ssh -i "sextonlab_linux.pem" -NfL 8887:localhost:8888 ubuntu@ec2-3-20-192-55.us-east-2.compute.amazonaws.com

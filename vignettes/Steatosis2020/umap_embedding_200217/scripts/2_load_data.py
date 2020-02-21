@@ -3,7 +3,9 @@ import numpy as np
 import pandas as pd
 from sklearn import preprocessing
 import joblib
+import pyarrow.parquet
 import pyarrow as pa
+
 
 # Birthday of Nicolaus Copernicus
 random_state = np.random.RandomState(seed=14730219)

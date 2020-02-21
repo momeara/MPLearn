@@ -25,6 +25,7 @@ def fit_embedding(
 		umap_n_neighbors=100,
 		umap_min_dist=0.0,
 		umap_metric='euclidean',
+		seed=None,
 		verbose=True):
 		"""
 		train_set: a feature matrix e.g. of (N, F) dimensions, used to define the embedding
@@ -42,6 +43,9 @@ def fit_embedding(
 				os.mkdir(embed_dir)
 		else:
 				print("embed_dir already exists: {}".format(embed_dir))
+
+    random_state = np.RandomState(seed=seed)
+
 		begin_time = time.time()
 		if verbose:
 				print("Reducing the dimension by PCA to {} dimensions".format(pca_n_components))
@@ -60,6 +64,7 @@ def fit_embedding(
 				n_neighbors=umap_n_neighbors,
 				min_dist=umap_min_dist,
 				init=umap_init,
+				random_state=random_state,
 				verbose=True)
 		umap_embedding = umap_reducer.fit_transform(pca_embedding)
 		umap_embedding = pd.DataFrame(
@@ -72,6 +77,7 @@ def fit_embedding(
 				print("saving embedding to {}".format(embed_dir))
 		with open("{}/model_info.tsv".format(embed_dir), 'w') as f:
 				f.write("key\tvalue\n")
+				f.write("seed\t{}\n".format(seed))
 				f.write("input_dim\t{}\n".format(dataset.shape))
 				f.write("pca_n_component\t{}\n".format(pca_n_components))
 				f.write("umap_n_component\t{}\n".format(umap_n_components))

@@ -45,6 +45,9 @@ def main(argv):
         "--compute_hdbscan_clusters", type=bool, action="store", dest="compute_hbscan_clusters", default=True,
         help="""Compute HBSCAN clusters and store in the tagged directory""")
     parser.add_argument(
+        "--seed", type=int, action="store", dest="seed", default=14730219,
+        help="""Initialize random state with this seed. Default is Nicolaus Copernicus' birthday""")
+    parser.add_argument(
         "--verbose", type=bool, action="store", dest="verbose", default=False,
         help="""Verbose output""")
 
@@ -61,6 +64,7 @@ def main(argv):
         umap_init=arguments.umap_init,
         umap_n_neighbors=arguments.umap_n_neighbors,
         umap_min_dist=arguments.umap_min_dist,
+        seed=arguments.seed,
         verbose=arguments.verbose)
     embedding.plot_embedding(
         embedding=dataset_embedding,

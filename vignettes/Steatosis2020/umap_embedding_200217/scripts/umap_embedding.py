@@ -3,6 +3,7 @@ import sys
 import argparse
 
 import pandas as pd
+import pyarrow as pa
 import joblib
 from MPLearn import embedding
 import hdbscan
@@ -24,7 +25,7 @@ def main(argv):
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
         "--dataset", type=str, action="store", dest="dataset",
-        help="""a pandas dataframe located in .joblib file""")
+        help="""Path to a parquet table on disk""")
     parser.add_argument(
         "--tag", type=str, action="store", dest="tag",
         help="""Directory where to store umap embedding and output images""")
@@ -70,14 +71,17 @@ def main(argv):
     if arguments.compute_hbscan_clusters:
         if arguments.verbose:
             print("Computing HBSCAN clusters ...")
+        import pdb
+        pdb.set_trace()
         clusterer = hdbscan.HDBSCAN(min_cluster_size=3)
         cluster_labels = clusterer.fit_predict(embedding)
+        cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
         joblib.dump(
             value=clusterer,
             filename="intermediate_data/{}/hdbscan_clusterer.joblib".format(arguments.tag))
-        joblib.dump(
-            value=cluster_labels,
-            filename="intermediate_data/{}/hdbscan_clustering.joblib".format(arguments.tag))
+        pa.parquet.write_table(
+            value=pa.Table.from_pandas(cluster_labels),
+            filename="intermediate_data/{}/hdbscan_cluster_labels.joblib".format(arguments.tag))
 
 if __name__ == "__main__":
     main(sys.argv)

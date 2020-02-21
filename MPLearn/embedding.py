@@ -6,6 +6,7 @@ import time
 import os
 import glob
 import joblib
+import pyarrow as pa
 import numpy as np
 from sklearn.decomposition import (PCA, IncrementalPCA)
 import umap
@@ -61,10 +62,13 @@ def fit_embedding(
 				init=umap_init,
 				verbose=True)
 		umap_embedding = umap_reducer.fit_transform(pca_embedding)
+		umap_embedding = pd.DataFrame(
+        data=umap_embedding,
+        columns=["UMAP_" + str(i+1) for i in range(umap_n_components)])
 		end_time = time.time()
+
 		if verbose:
 				print("created embedding {0} runtime: {1:.2f}s".format(embed_dir, end_time-begin_time))
-		if verbose:
 				print("saving embedding to {}".format(embed_dir))
 		with open("{}/model_info.tsv".format(embed_dir), 'w') as f:
 				f.write("key\tvalue\n")
@@ -81,9 +85,9 @@ def fit_embedding(
 		joblib.dump(
 				value=umap_reducer,
 				filename="{}/umap_reducer.joblib".format(embed_dir))
-		joblib.dump(
-				value=umap_embedding,
-				filename="{}/umap_embedding.joblib".format(embed_dir))
+		pa.parquet.write_table(
+        table=pa.Table.from_pandas(umap_embedding),
+        where="{}/umap_embedding.parquet".format(embed_dir))
 		return umap_embedding
 
 
@@ -100,6 +104,9 @@ def embed(
     umap_reducer = joblib.load(filename="{}/umap_reducer.joblib".format(embed_dir))
     pca_embedding = pca_reducer.transform(data)
     umap_embedding = umap_reducer.transform(pca_embedding)
+		umap_embedding = pd.DataFrame(
+        data=umap_embedding,
+        columns=["UMAP_" + str(i+1) for i in range(umap_embedding.shape[1])])
     end_time = time.time()
     if verbose:
         print("embedded data onto {0} runtime: {1:.2f}s".format(embed_dir, begin_time-end_time))
@@ -122,14 +129,19 @@ def embed_dataset(
 
     for i, shard_fname in enumerate(dataset.metadata_df['X']):
         print("embedding shard {}".format(i))
-        output_path = "{}/umap_embedding_shard-{}.joblib".format(output_dir, i)
+        output_path = "{}/umap_embedding_shard-{}.parquet".format(output_dir, i)
         if os.path.exists(output_path):
             print("  Skipping because {} exists".format(output_path))
             continue
         shard = joblib.load(os.path.join(dataset.data_dir, shard_fname))
         pca_embedding = pca_reducer.transform(shard)
         umap_embedding = umap_reducer.transform(pca_embedding)
-        joblib.dump(umap_embedding, output_path)
+				umap_embedding = pd.DataFrame(
+            data=umap_embedding,
+            columns=["UMAP_" + str(i+1) for i in range(umap_embedding.shape[1])])
+    		pa.parquet.write_table(
+            table=pa.Table.from_pandas(umap_embedding),
+            where=output_path)
 
     end_time = time.time()
     if verbose:
@@ -138,19 +150,28 @@ def embed_dataset(
 
 def gather_embedding_shards(
 		embedding_dir):
-		shard_fnames = glob.glob(os.path.join(embedding_dir, "umap_embedding_shard-*.joblib"))
-		shape1 = 2
-		shape0 = joblib.load(shard_fnames[0]).shape[0]
-		last_shape0 = joblib.load(shard_fnames[-1]).shape[0]
+		shard_fnames = glob.glob(os.path.join(embedding_dir, "umap_embedding_shard-*.parquet"))
+
+		# load the first shard to get the typical shape:
+		shard_0 = pa.parquet.read_table(shard_fnames[0]).to_pandas()
+		shape_0 = shard_0.shape[0]
+		shape_1 = shard_0.shape[1]
+
+		# load the last shard to get the number of rows of the last shard:
+		shard_last = pa.parquet.read_table(shard_fnames[-1]).to_pandas()
+		shape_last_0 = shard_last.shape[0]
+
+		# compute the overall shape of the data
 		n_shards = len(shard_fnames)
-		shape = ((n_shards - 1) * shape0 + last_shape0, shape1)
+		shape = ((n_shards - 1) * shape_0 + shape_last_0, shape_1)
+
 		print("loading embedding of shape {} from {}".format(shape, embedding_dir))
 		embedding = np.zeros(shape)
 		for i, shard_fname in enumerate(shard_fnames):
 				if i % 50 == 0:
 						print("Loading shard {}".format(shard_fname))
-				shard = joblib.load(shard_fname)
-				embedding[shape0*i:shape0*i + shard.shape[0], :] = shard
+        shard = pa.parquet.read_table(shard_fname).to_pandas()
+				embedding[shape_0*i:shape_0*i + shard.shape[0], :] = shard
 		return embedding
 
 def plot_embedding(
@@ -179,10 +200,10 @@ def plot_embedding_labels(
 		cmap=fire,
 		shade_how='eq_hist',
     background=""):
-    embedding = pd.DataFrame(data=embedding, columns = ["x", "y"])
+    assert(embedding.shape[1] == 2)
     canvas = datashader.Canvas(
 				plot_width=plot_width,
-        plot_height=plot_height).points(embedding, 'x', 'y')
+        plot_height=plot_height).points(embedding, 'UMAP_1', 'UMAP_2')
     canvas = datashader.transfer_functions.shade(canvas, how=shade_how, cmap=fire)
     if background:
         canvas = set_background(canvas, background)

@@ -1,3 +1,6 @@
+![MPLearn Logo](MPLearn_logo.png "")
+
+
 # Machine Learning for Morphological Profiling Data
 
 

@@ -23,6 +23,7 @@ setup(
         'pandas' : ['pandas>=1.0.1'],
         'umap-learn' : ['umap-learn>0.3.6'],
     },
+    scripts=['bin/embed_umap'],
     tests_require=['pytest'],
     url='http://github.com/momeara/MPLearn',
     keywords='machine learning tensorflow molecular simulations prediction',

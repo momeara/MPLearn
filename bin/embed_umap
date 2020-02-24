@@ -21,7 +21,7 @@ Usage, for example:
         --dataset intermediate_data/cf10k.joblib \
         --embed_dir intermediate_data/cf10k_embedding_pca20_umap2_1_1_euclid \
         --umap_n_neighbors 1 \
-        --umap_min_dist 1 
+        --umap_min_dist 1
 """
 
 def main(argv):
@@ -62,7 +62,7 @@ def main(argv):
     dataset = pa.parquet.read_table(source=arguments.dataset).to_pandas()
 
     if arguments.verbose:
-        print("Computing UMAP embedding clusters ...")    
+        print("Computing UMAP embedding clusters ...")
     dataset_embedding = embedding.fit_embedding(
         dataset=dataset,
         embed_dir="intermediate_data/{}".format(arguments.tag),

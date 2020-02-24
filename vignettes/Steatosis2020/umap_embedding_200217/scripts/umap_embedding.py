@@ -45,8 +45,8 @@ def main(argv):
         "--umap_init", type=str, action="store", dest="umap_init", default='spectral',
         help="""UMAP initialization. Spectral is prefered, but random is more robust""")
     parser.add_argument(
-        "--hbscan_min", type=int, action="store", dest="hbscan_min", default=100,
-        help="""HBSCAN min cluster size""")
+        "--hbscan_min_cluster_size", type=int, action="store", dest="hbscan_min_cluster_size", default=100,
+        help="""HBSCAN minimum cluster size""")
     parser.add_argument(
         "--compute_hdbscan_clusters", type=bool, action="store", dest="compute_hbscan_clusters", default=True,
         help="""Compute HBSCAN clusters and store in the tagged directory""")
@@ -81,17 +81,16 @@ def main(argv):
     if arguments.compute_hbscan_clusters:
         if arguments.verbose:
             print("Computing HBSCAN clusters ...")
-        import pdb
-        pdb.set_trace()
-        clusterer = hdbscan.HDBSCAN(min_cluster_size=3)
-        cluster_labels = clusterer.fit_predict(embedding)
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=arguments.hbscan_min_cluster_size)
+        cluster_labels = clusterer.fit_predict(dataset_embedding)
         cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
         joblib.dump(
             value=clusterer,
-            filename="intermediate_data/{}/hdbscan_clusterer_min{}.joblib".format(arguments.tag))
+            filename="intermediate_data/{}/hdbscan_clusterer_min{}.joblib".format(
+                arguments.tag, arguments.hbscan_min_cluster_size ))
         pa.parquet.write_table(
-            value=pa.Table.from_pandas(cluster_labels),
-            filename="intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hbscan_min))
+            table=pa.Table.from_pandas(cluster_labels),
+            where="intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hbscan_min_cluster_size))
 
 if __name__ == "__main__":
     main(sys.argv)

@@ -1,8 +1,15 @@
 
 install_prereqs:
-	conda install setuptools pandas joblib scikit-learn umap-learn
+	conda install setuptools pandas joblib scikit-learn umap-learn nodejs
 	conda install -c conda-forge umap-learn hbscan jupyterlab datashader holoviews
+	conda install -c pyviz panel
 	pip install nbdev
+
+	# make jupyter lab work with holoviews
+        jupyter labextension install jupyterlab_bokeh
+        jupyter labextension install @pyviz/jupyterlab_pyviz
+        echo "c = get_config()" >> $(jupyter --config_dir)/jupyter_notebook_config.py
+	echo "c.NotebookApp.iopub_data_rate_limit=100000000" >> $(jupyter --config_dir)/jupyter_notebook_config.py
 
 install:
 	python setup.py install

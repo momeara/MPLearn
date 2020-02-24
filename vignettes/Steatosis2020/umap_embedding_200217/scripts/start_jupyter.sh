@@ -1,4 +1,4 @@
 #!/bin/bash
 
 
-jupyter lab --no-browser
+jupyter notebook --no-browser

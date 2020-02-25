@@ -33,10 +33,13 @@ def main(argv):
         "--tag", type=str, action="store", dest="tag",
         help="""Directory where to store umap embedding and output images""")
     parser.add_argument(
-        "--pca_n_components", type=int, action="store", dest="pca_n_components", default=20,
+        "--pca_n_components", type=int, action="store", dest="pca_n_components", default=None,
         help="""Dimension of the preliminary PCA embedding""")
     parser.add_argument(
-        "--umap_n_neighbors", type=int, action="store", dest="umap_n_neighbors", default=0,
+        "--umap_n_components", type=int, action="store", dest="umap_n_components", default=None,
+        help="""Dimension of the resulting UMAP embedding""")
+    parser.add_argument(
+        "--umap_n_neighbors", type=int, action="store", dest="umap_n_neighbors", default=15,
         help="""Number of neighbors when computing UMAP embedding""")
     parser.add_argument(
         "--umap_min_dist", type=float, action="store", dest="umap_min_dist", default=0.0,
@@ -63,10 +66,12 @@ def main(argv):
 
     if arguments.verbose:
         print("Computing UMAP embedding clusters ...")
+
     dataset_embedding = embedding.fit_embedding(
         dataset=dataset,
         embed_dir="intermediate_data/{}".format(arguments.tag),
         pca_n_components=arguments.pca_n_components,
+		umap_n_components=arguments.umap_n_components,
         umap_init=arguments.umap_init,
         umap_n_neighbors=arguments.umap_n_neighbors,
         umap_min_dist=arguments.umap_min_dist,

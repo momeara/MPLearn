@@ -19,7 +19,7 @@ from colorcet import fire
 def fit_embedding(
 	dataset,
 	embed_dir,
-	pca_n_components=20,
+	pca_n_components=None,
 	umap_n_components=2,
 	umap_init='random',
 	umap_n_neighbors=100,
@@ -47,15 +47,19 @@ def fit_embedding(
 	random_state = np.random.RandomState(seed=seed)
 
 	begin_time = time.time()
-	if verbose:
-		print("Reducing the dimension by PCA to {} dimensions".format(pca_n_components))
-	#pca_reducer = PCA(n_components = pca_n_components)
-	pca_reducer = IncrementalPCA(
-		n_components = pca_n_components,
-		batch_size=1000,
-		copy=False)
-	pca_reducer.fit(dataset)
-	pca_embedding = pca_reducer.transform(dataset)
+	if pca_n_components is not None:
+		if verbose:
+			print("Reducing the dimension by PCA to {} dimensions".format(pca_n_components))
+		#pca_reducer = PCA(n_components = pca_n_components)
+		pca_reducer = IncrementalPCA(
+			n_components = pca_n_components,
+			batch_size=1000,
+			copy=False)
+		pca_reducer.fit(dataset)
+		pca_embedding = pca_reducer.transform(dataset)
+	else:
+		pca_embedding = dataset
+
 	if verbose:
 		print("Reducing the dimension by UMAP to {} dimensions".format(umap_n_components))
 	umap_reducer = umap.UMAP(
@@ -85,9 +89,12 @@ def fit_embedding(
 		f.write("umap_n_neighbors\t{}\n".format(umap_n_neighbors))
 		f.write("umap_min_dist\t{}\n".format(umap_min_dist))
 		f.write("umap_init\t{}\n".format(umap_init))
-	joblib.dump(
-		value=pca_reducer,
-		filename="{}/pca_reducer.joblib".format(embed_dir))
+
+	if pca_n_components is not None:
+		joblib.dump(
+			value=pca_reducer,
+			filename="{}/pca_reducer.joblib".format(embed_dir))
+
 	joblib.dump(
 		value=umap_reducer,
 		filename="{}/umap_reducer.joblib".format(embed_dir))
@@ -106,9 +113,20 @@ def embed(
 	"""
 	begin_time = time.time()
 	print("Loading PCA->UMAP reducer ...")
-	pca_reducer = joblib.load(filename="{}/pca_reducer.joblib".format(embed_dir))
+	try:
+		pca_reducer = joblib.load(filename="{}/pca_reducer.joblib".format(embed_dir))
+	except:
+		if verbose:
+			print("PCA Reducer not found at '{}/pca_reducer.joblib', assume no pre-dimensionality reduction by PCA".format(embed_dir))
+		pca_reducer = None
+
 	umap_reducer = joblib.load(filename="{}/umap_reducer.joblib".format(embed_dir))
-	pca_embedding = pca_reducer.transform(data)
+
+	if pca_reducer:
+		pca_embedding = pca_reducer.transform(data)
+	else:
+		pca_embdding = data
+
 	umap_embedding = umap_reducer.transform(pca_embedding)
 	umap_embedding = pd.DataFrame(
 		data=umap_embedding,
@@ -129,7 +147,13 @@ def embed_dataset(
 	begin_time = time.time()
 
 	print("Loading PCA->UMAP reducer ...")
-	pca_reducer = joblib.load(filename="{}/pca_reducer.joblib".format(embed_dir))
+	try:
+		pca_reducer = joblib.load(filename="{}/pca_reducer.joblib".format(embed_dir))
+	except:
+		if verbose:
+			print("PCA Reducer not found at '{}/pca_reducer.joblib', assume no pre-dimensionality reduction by PCA".format(embed_dir))
+		pca_reducer = None
+
 	umap_reducer = joblib.load(filename="{}/umap_reducer.joblib".format(embed_dir))
 
 
@@ -140,7 +164,11 @@ def embed_dataset(
 			print("  Skipping because {} exists".format(output_path))
 			continue
 		shard = joblib.load(os.path.join(dataset.data_dir, shard_fname))
-		pca_embedding = pca_reducer.transform(shard)
+		if pca_reducer is not None:
+			pca_embedding = pca_reducer.transform(shard)
+		else:
+			pca_embedding = shard
+
 		umap_embedding = umap_reducer.transform(pca_embedding)
 		umap_embedding = pd.DataFrame(
 			data=umap_embedding,

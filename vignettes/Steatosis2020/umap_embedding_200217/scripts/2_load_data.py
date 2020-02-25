@@ -25,12 +25,31 @@ cell_meta = cell_features[[
     'Unique']]
 
 pa.parquet.write_table(
-    data=pa.Table.from_pandas(cell_meta),
+    table=pa.Table.from_pandas(cell_meta),
     where='intermediate_data/cell_meta.parquet')
 
 cell_features = cell_features[
     [c for c in cell_features.columns if c not in cell_meta.columns]]
-# [1480149 rows x 200 columns]
+
+# filter out LipidsFromTrans features as it's not in later the DR_5 set
+cell_features = cell_features [
+    [ c for c in cell_features.columns if not 'LipidsFromTrans' in c]]
+# [1480149 rows x 196 columns]
+
+# full set of cells
+pa.parquet.write_table(
+    table=pa.Table.from_pandas(cell_features),
+    where="intermediate_data/cell_features.parquet")
+cell_features_scaler = preprocessing.StandardScaler().fit(cell_features)
+cell_features_normed = cell_features_scaler.transform(cell_features)
+cell_features_normed = pd.DataFrame(cell_features_normed, columns=cell_features.columns)
+joblib.dump(
+    value=cell_features_scaler,
+    filename="intermediate_data/cell_features_scaler.joblib")
+pa.parquet.write_table(
+    table=pa.Table.from_pandas(cell_features_normed),
+    where="intermediate_data/cell_features_normed.parquet")
+
 
 #######################
 # random sample of 10k cells
@@ -77,18 +96,3 @@ joblib.dump(
 pa.parquet.write_table(
     table=pa.Table.from_pandas(cf200k_normed),
     where="intermediate_data/cf200k_normed.parquet")
-
-# full set of cells
-pa.parquet.write_table(
-    table=pa.Table.from_pandas(cell_features),
-    where="intermediate_data/cell_features.joblib")
-cell_features_scaler = preprocessing.StandardScaler().fit(cell_features)
-cell_features_normed = cell_features_scaler.transform(cell_features)
-cell_features_normed = pd.DataFrame(cell_features_normed, columns=cell_features.columns)
-joblib.dump(
-    value=cell_features_scaler,
-    filename="intermediate_data/cell_features_scaler.joblib")
-pa.parquet.write_table(
-    table=pa.Table.from_pandas(cell_features_normed),
-    where="intermediate_data/cell_features_normed.parquet")
-

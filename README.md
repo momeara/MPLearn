@@ -29,3 +29,14 @@ download and install MPLearn package
     make install_prereqs
     make install
 
+## Running Notebooks from superior.sextonlab.com
+
+Get the `sextonlab_Nvirginia.pem` file and set permissions
+
+   chomd 400 sextonlab_Nvirginia.pem
+
+Start at ssh tunnel:
+
+    ssh -i "sextonlab_Nvirginia.pem" -NfL 8886:localhost:8888 ubuntu@superior.sextonlab.com
+
+open the webbrowser and put in the secret token

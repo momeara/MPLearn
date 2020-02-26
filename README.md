@@ -31,6 +31,11 @@ download and install MPLearn package
 
 ## Running Notebooks from superior.sextonlab.com
 
+1. Start the notebook server
+
+    ./vignettes/Steatosis2020/scripts/start_jupyter.sh
+    # record the security token
+
 Get the `sextonlab_Nvirginia.pem` file and set permissions
 
    chomd 400 sextonlab_Nvirginia.pem

@@ -40,5 +40,5 @@ start_Steatosis2020_vignette_notebooks:
 	# note the secret token
 	# on local machine:
 	#   ssh -i "sextonlab_linux.pem" -NfL 8887:localhost:8888 ubuntu@ec2-3-20-192-55.us-east-2.compute.amazonaws.com
-	#   natigate browser to localhost:8887
+	#   natigate browser to localhost:8886
 	#   put in security token

@@ -38,3 +38,7 @@ pip-delete-this-directory.txt
 *.parquet
 
 Rplots.pdf
+
+vignettes/*/*/product/*
+vignettes/*/*/intermediate_data/*
+vignettes/*/*/input/*

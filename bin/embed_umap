@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- tab-width:4;indent-tabs-mode:t;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
 # vi: set ts=2 noet:
 
@@ -14,14 +15,25 @@ import hdbscan
 DESCRIPTION="""Do the embedding for one dataset with one set of parameters
 version 0.0.1
 
-Usage, for example:
+Example:
+Fit and embed the full cell features matrix:
 
     cd MPLearn/vignettes/Steatosis2020/umap_embedding_200217
     python scripts/umap_embedding.py \
-        --dataset intermediate_data/cf10k.joblib \
-        --embed_dir intermediate_data/cf10k_embedding_pca20_umap2_1_1_euclid \
-        --umap_n_neighbors 1 \
-        --umap_min_dist 1
+        --dataset intermediate_data/cf10k.parquet \
+        --tag cell_features_pca_umap2_15_0.0 \
+        --umap_n_components 2 \
+        --umap_n_neighbors 15 \
+        --umap_min_dist 0.0
+
+Embed a 10k subset of cell features given a reference embedding:
+
+    cd MPLearn/vignettes/Steatosis2020/umap_embedding_200217
+    python scripts/umap_embedding.py \
+        --dataset intermediate_data/cf10k.parquet \
+        --tag cf10k_pca_umap2_15_0.0_euclid \
+        --ref_embed_dir intermediate_data/cell_features_pca_umap2_15_0.0
+
 """
 
 def main(argv):
@@ -31,7 +43,10 @@ def main(argv):
         help="""Path to a parquet table on disk""")
     parser.add_argument(
         "--tag", type=str, action="store", dest="tag",
-        help="""Directory where to store umap embedding and output images""")
+        help="""Identifier for embedding""")
+    parser.add_argument(
+        "--ref_embed_dir", type=str, action="store", dest="ref_embed_dir", default=None,
+        help="""Directory of previously computed embedding to use to re-embed the given dataset.""")
     parser.add_argument(
         "--pca_n_components", type=int, action="store", dest="pca_n_components", default=None,
         help="""Dimension of the preliminary PCA embedding""")
@@ -64,21 +79,32 @@ def main(argv):
 
     dataset = pa.parquet.read_table(source=arguments.dataset).to_pandas()
 
-    if arguments.verbose:
-        print("Computing UMAP embedding clusters ...")
+    if arguments.ref_embed_dir is not None:
+        if arguments.verbose:
+            print("Emebedding dataset in reference UMAP {} ...".format(arguments.ref_embed_dir))
 
-    dataset_embedding = embedding.fit_embedding(
-        dataset=dataset,
-        embed_dir="intermediate_data/{}".format(arguments.tag),
-        pca_n_components=arguments.pca_n_components,
-		umap_n_components=arguments.umap_n_components,
-        umap_init=arguments.umap_init,
-        umap_n_neighbors=arguments.umap_n_neighbors,
-        umap_min_dist=arguments.umap_min_dist,
-        seed=arguments.seed,
-        verbose=arguments.verbose)
+        umap_embedding = embedding.embed(
+            dataset=dataset,
+            embed_dir="intermediate_data/{}".format(arguments.tag),
+            ref_embed_dir="{}".format(arguments.ref_embed_dir),
+            verbose=arguments.verbose)
+    else:
+        if arguments.verbose:
+            print("Computing UMAP embedding ...")
+
+        umap_embedding = embedding.fit_embedding(
+            dataset=dataset,
+            embed_dir="intermediate_data/{}".format(arguments.tag),
+            pca_n_components=arguments.pca_n_components,
+            umap_n_components=arguments.umap_n_components,
+            umap_init=arguments.umap_init,
+            umap_n_neighbors=arguments.umap_n_neighbors,
+            umap_min_dist=arguments.umap_min_dist,
+            seed=arguments.seed,
+            verbose=arguments.verbose)
+
     embedding.plot_embedding(
-        embedding=dataset_embedding,
+        embedding=umap_embedding,
         plot_width=2000,
         plot_height=2000,
         output_fname="product/figures/{}_embedding.png".format(arguments.tag))
@@ -87,7 +113,7 @@ def main(argv):
         if arguments.verbose:
             print("Computing HBSCAN clusters ...")
         clusterer = hdbscan.HDBSCAN(min_cluster_size=arguments.hbscan_min_cluster_size)
-        cluster_labels = clusterer.fit_predict(dataset_embedding)
+        cluster_labels = clusterer.fit_predict(umap_embedding)
         cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
         joblib.dump(
             value=clusterer,

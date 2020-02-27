@@ -26,7 +26,7 @@ setup(
     scripts=['bin/embed_umap'],
     tests_require=['pytest'],
     url='http://github.com/momeara/MPLearn',
-    keywords='machine learning tensorflow molecular simulations prediction',
+    keywords='machine learning CellPaining',
     license='Apache License 2.0',
     classifiers=[
         'Intended Audience :: Developers',

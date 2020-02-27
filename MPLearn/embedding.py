@@ -4,6 +4,7 @@
 import time
 import os
 import glob
+import shutil
 import joblib
 import pyarrow.parquet
 import pyarrow as pa
@@ -48,17 +49,18 @@ def fit_embedding(
 
 	begin_time = time.time()
 	if pca_n_components is not None:
+		pca_n_components = dataset.shape[1]
 		if verbose:
-			print("Reducing the dimension by PCA to {} dimensions".format(pca_n_components))
-		#pca_reducer = PCA(n_components = pca_n_components)
-		pca_reducer = IncrementalPCA(
-			n_components = pca_n_components,
-			batch_size=1000,
-			copy=False)
-		pca_reducer.fit(dataset)
-		pca_embedding = pca_reducer.transform(dataset)
-	else:
-		pca_embedding = dataset
+		    print("Setting PCA n_componets to full rank of dataset: {}".format(pca_n_components))
+
+	if verbose:
+		print("Reducing the dimension by PCA from {} to {} dimensions".format(dataset.shape[1], pca_n_components))
+	pca_reducer = IncrementalPCA(
+		n_components = pca_n_components,
+		batch_size=1000,
+		copy=False)
+	pca_reducer.fit(dataset)
+	pca_embedding = pca_reducer.transform(dataset)
 
 	if verbose:
 		print("Reducing the dimension by UMAP to {} dimensions".format(umap_n_components))
@@ -105,27 +107,35 @@ def fit_embedding(
 
 
 def embed(
+	dataset,
 	embed_dir,
-	data,
+	ref_embed_dir,
 	verbose=True):
 	"""
 	Given a previously defined embedding, embed a new dataset into it
 	"""
+
+	if not os.path.exists(embed_dir):
+		os.mkdir(embed_dir)
+	else:
+		print("WARNING: embed_dir already exists: {}".format(embed_dir))
+
 	begin_time = time.time()
-	print("Loading PCA->UMAP reducer ...")
+	if verbose:
+		print("Loading reference PCA->UMAP reducer from embd_dir {} ...".format(ref_embed_dir))
 	try:
-		pca_reducer = joblib.load(filename="{}/pca_reducer.joblib".format(embed_dir))
+		pca_reducer = joblib.load(filename="{}/pca_reducer.joblib".format(ref_embed_dir))
 	except:
 		if verbose:
 			print("PCA Reducer not found at '{}/pca_reducer.joblib', assume no pre-dimensionality reduction by PCA".format(embed_dir))
 		pca_reducer = None
 
-	umap_reducer = joblib.load(filename="{}/umap_reducer.joblib".format(embed_dir))
+	umap_reducer = joblib.load(filename="{}/umap_reducer.joblib".format(ref_embed_dir))
 
 	if pca_reducer:
-		pca_embedding = pca_reducer.transform(data)
+		pca_embedding = pca_reducer.transform(dataset)
 	else:
-		pca_embdding = data
+		pca_embdding = dataset
 
 	umap_embedding = umap_reducer.transform(pca_embedding)
 	umap_embedding = pd.DataFrame(
@@ -134,79 +144,24 @@ def embed(
 	end_time = time.time()
 	if verbose:
 		print("embedded data onto {0} runtime: {1:.2f}s".format(embed_dir, begin_time-end_time))
+
+	if verbose:
+		print("Copying model info from reference embed dir.")
+	try:
+		shutil.copyfile(
+			source="{}/model_info.tsv".format(ref_embed_dir),
+			destination="{}/model_info.tsv".format(embed_dir))
+	except:
+		print("WARNING: Failed to copy reference model info from '{}/model_info.tsv' to '{}/model_info.tsv'".format(ref_embed_dir, embed_dir))
+
+	with open("{}/model_info.tsv".format(embed_dir), 'a') as f:
+		f.write("ref_embed_dir\t{}\n".format(ref_embed_dir))
+
+	pa.parquet.write_table(
+		table=pa.Table.from_pandas(umap_embedding),
+		where="{}/umap_embedding.parquet".format(embed_dir))
 	return umap_embedding
 
-def embed_dataset(
-	embed_dir,
-	dataset,
-	output_dir,
-	verbose=True):
-	"""
-	Given a previously defined embedding, embed a new dataset into it
-	"""
-	begin_time = time.time()
-
-	print("Loading PCA->UMAP reducer ...")
-	try:
-		pca_reducer = joblib.load(filename="{}/pca_reducer.joblib".format(embed_dir))
-	except:
-		if verbose:
-			print("PCA Reducer not found at '{}/pca_reducer.joblib', assume no pre-dimensionality reduction by PCA".format(embed_dir))
-		pca_reducer = None
-
-	umap_reducer = joblib.load(filename="{}/umap_reducer.joblib".format(embed_dir))
-
-
-	for i, shard_fname in enumerate(dataset.metadata_df['X']):
-		print("embedding shard {}".format(i))
-		output_path = "{}/umap_embedding_shard-{}.parquet".format(output_dir, i)
-		if os.path.exists(output_path):
-			print("  Skipping because {} exists".format(output_path))
-			continue
-		shard = joblib.load(os.path.join(dataset.data_dir, shard_fname))
-		if pca_reducer is not None:
-			pca_embedding = pca_reducer.transform(shard)
-		else:
-			pca_embedding = shard
-
-		umap_embedding = umap_reducer.transform(pca_embedding)
-		umap_embedding = pd.DataFrame(
-			data=umap_embedding,
-			columns=["UMAP_" + str(i+1) for i in range(umap_embedding.shape[1])])
-		pa.parquet.write_table(
-			table=pa.Table.from_pandas(umap_embedding),
-			where=output_path)
-
-	end_time = time.time()
-	if verbose:
-		print("embedded data onto {0} runtime: {1:.2f}s".format(embed_dir, begin_time-end_time))
-
-
-def gather_embedding_shards(
-	embedding_dir):
-	shard_fnames = glob.glob(os.path.join(embedding_dir, "umap_embedding_shard-*.parquet"))
-
-	# load the first shard to get the typical shape:
-	shard_0 = pa.parquet.read_table(shard_fnames[0]).to_pandas()
-	shape_0 = shard_0.shape[0]
-	shape_1 = shard_0.shape[1]
-
-	# load the last shard to get the number of rows of the last shard:
-	shard_last = pa.parquet.read_table(shard_fnames[-1]).to_pandas()
-	shape_last_0 = shard_last.shape[0]
-
-	# compute the overall shape of the data
-	n_shards = len(shard_fnames)
-	shape = ((n_shards - 1) * shape_0 + shape_last_0, shape_1)
-
-	print("loading embedding of shape {} from {}".format(shape, embedding_dir))
-	embedding = np.zeros(shape)
-	for i, shard_fname in enumerate(shard_fnames):
-		if i % 50 == 0:
-			print("Loading shard {}".format(shard_fname))
-		shard = pa.parquet.read_table(shard_fname).to_pandas()
-		embedding[shape_0*i:shape_0*i + shard.shape[0], :] = shard
-	return embedding
 
 def plot_embedding(
 	embedding,

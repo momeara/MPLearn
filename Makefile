@@ -5,6 +5,9 @@ install_prereqs:
 	conda install -c pyviz panel
 	pip install nbdev
 
+	wget https://files.pythonhosted.org/packages/59/9c/972de8fb6246be6557a16565c4cc1977ea9e275540a77ec4a2e0057dc593/tf_nightly-2.2.0.dev20200228-cp38-cp38-manylinux2010_x86_64.whl
+	pip install tf_nightly-2.2.0.dev20200228-cp38-cp38-manylinux2010_x86_64.whl
+
 	# make jupyter lab work with holoviews
         jupyter labextension install jupyterlab_bokeh
         jupyter labextension install @pyviz/jupyterlab_pyviz

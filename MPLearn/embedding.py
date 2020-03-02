@@ -166,15 +166,14 @@ def embed(
 def plot_embedding(
 	embedding,
 	output_fname,
-	plot_width=400,
-	plot_height=400,
+	plot_width=1000,
+	plot_height=1000,
 	cmap=fire,
 	shade_how='eq_hist',
-	background=""):
-	embedding = pd.DataFrame(data=embedding, columns = ["x", "y"])
-	canvas = datashader.Canvas(
-		plot_width=plot_width,
-		plot_height=plot_height).points(embedding, 'x', 'y')
+	background="black"):
+	embedding = pd.DataFrame(data=embedding, columns = ["UMAP_1", "UMAP_2"])
+	canvas = datashader.Canvas(plot_width=plot_width, plot_height=plot_height)
+	canvas = canvas.points(embedding, 'UMAP_1', 'UMAP_2')
 	canvas = datashader.transfer_functions.shade(canvas, how=shade_how, cmap=fire)
 	if background:
 		canvas = set_background(canvas, background)
@@ -197,3 +196,18 @@ def plot_embedding_labels(
 	if background:
 		canvas = set_background(canvas, background)
 	canvas.to_pil().convert('RGB').save(output_fname)
+
+
+def load_embedding(experiment_path, embedding_tag, meta_columns=['Condition', 'Concentration']):
+    """load cell embedding from an embed_umap run
+
+    Returns: pd.DataFrame with for each cell in <experiment> with columns:
+             <meta_columns> UMAP_1 ... cluster_label
+    """
+    cell_meta = pa.parquet.read_table(source="{}/intermediate_data/cell_meta.parquet".format(experiment_path)).to_pandas()
+    cell_meta = cell_meta[meta_columns]
+    embed_dir = "{}/intermediate_data/{}".format(experiment_path, embedding_tag)
+    embedding = pa.parquet.read_table(source="{}/umap_embedding.parquet".format(embed_dir)).to_pandas()
+    cluster_labels = pa.parquet.read_table("{}/hdbscan_clustering_min100.parquet".format(embed_dir)).to_pandas()
+    embedding = pd.concat([cell_meta, embedding, cluster_labels], axis=1)
+    return embedding

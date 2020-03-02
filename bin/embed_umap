@@ -105,8 +105,6 @@ def main(argv):
 
     embedding.plot_embedding(
         embedding=umap_embedding,
-        plot_width=2000,
-        plot_height=2000,
         output_fname="product/figures/{}_embedding.png".format(arguments.tag))
 
     if arguments.compute_hbscan_clusters:

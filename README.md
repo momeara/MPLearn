@@ -7,7 +7,16 @@
 
 ## Installation
 
-### install conda environment
+### install conda environment on window
+
+    install OpenSSL:
+         https://slproweb.com/products/Win32OpenSSL.html
+	 ![Win64 OpenSSL v1.1.1d Light (EXE)](https://slproweb.com/download/Win64OpenSSL_Light-1_1_1d.exe)
+
+    follow instructions on https://docs.conda.io/en/latest/miniconda.html
+    
+
+### install conda environment on linux
 
 For example, for a linux envirnoment download and install the latest conda platform
 

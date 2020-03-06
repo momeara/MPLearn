@@ -1,7 +1,11 @@
 
 install_prereqs:
 	conda install setuptools pandas joblib scikit-learn nodejs
-	conda install -c conda-forge umap-learn hdbscan jupyterlab datashader holoviews
+	conda install -c conda-forge umap-learn
+        conda install -c hdbscan
+        conda install -c jupyterlab
+        conda install -c datashader
+        conda install -c holoviews
 	conda install -c pyviz panel
 	pip install nbdev
 

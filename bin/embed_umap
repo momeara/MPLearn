@@ -9,6 +9,7 @@ import pandas as pd
 import pyarrow.parquet
 import pyarrow as pa
 import joblib
+import numpy as np
 from MPLearn import embedding
 import hdbscan
 
@@ -40,86 +41,175 @@ def main(argv):
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
         "--dataset", type=str, action="store", dest="dataset",
-        help="""Path to a parquet table on disk""")
+        help="""Path to a parquet table on disk (Required)""")
+    parser.add_argument(
+        "--columns", type=str, action="store", dest="columns", default=None,
+        help="""A file containing columns to read in, one per line (Default: use all columns)""")
+    parser.add_argument(
+        "--random_subset", type=int, action="store", dest="random_subset", default=None,
+        help="""Filter to a random subset of rows of the given size (Default: use all rows)""")
     parser.add_argument(
         "--tag", type=str, action="store", dest="tag",
-        help="""Identifier for embedding""")
+        help="""Identifier for embedding (Required)""")
     parser.add_argument(
         "--ref_embed_dir", type=str, action="store", dest="ref_embed_dir", default=None,
-        help="""Directory of previously computed embedding to use to re-embed the given dataset.""")
+        help="""Directory of previously computed embedding to use to re-embed the given dataset (Default: Do not re-embed)""")
+    parser.add_argument(
+        "--standarize_features", type=bool, action="store", dest="standardize_features", default=True,
+        help="""Standardize each feature to have mean 0 and unit variance (Default: True)""")
     parser.add_argument(
         "--pca_n_components", type=int, action="store", dest="pca_n_components", default=None,
-        help="""Dimension of the preliminary PCA embedding""")
+        help="""Dimension of the preliminary PCA embedding (Default: PCA with no-dimensionality reduction)""")
     parser.add_argument(
-        "--umap_n_components", type=int, action="store", dest="umap_n_components", default=None,
-        help="""Dimension of the resulting UMAP embedding""")
+        "--umap_n_components", type=int, action="store", dest="umap_n_components", default=2,
+        help="""Dimension of the resulting UMAP embedding (Default: 2)""")
     parser.add_argument(
         "--umap_n_neighbors", type=int, action="store", dest="umap_n_neighbors", default=15,
-        help="""Number of neighbors when computing UMAP embedding""")
+        help="""Number of neighbors when computing UMAP embedding (Default: 15)""")
     parser.add_argument(
         "--umap_min_dist", type=float, action="store", dest="umap_min_dist", default=0.0,
-        help="""Minimum distance between points in UMAP embedding""")
+        help="""Minimum distance between points in UMAP embedding (Default: 0.0)""")
     parser.add_argument(
         "--umap_init", type=str, action="store", dest="umap_init", default='spectral',
-        help="""UMAP initialization. Spectral is prefered, but random is more robust""")
+        help="""UMAP initialization. Spectral is preferred, but random is more robust (Default: spectral)""")
     parser.add_argument(
-        "--hbscan_min_cluster_size", type=int, action="store", dest="hbscan_min_cluster_size", default=100,
-        help="""HBSCAN minimum cluster size""")
+        "--save_transform", action="store_true", dest="save_transform", default=True,
+        help="""Save the computed embedding transformation to re-embed other points (Default: True)""")
     parser.add_argument(
-        "--compute_hdbscan_clusters", type=bool, action="store", dest="compute_hbscan_clusters", default=True,
-        help="""Compute HBSCAN clusters and store in the tagged directory""")
+        "--hdbscan_min_cluster_size", type=int, action="store", dest="hdbscan_min_cluster_size", default=100,
+        help="""HDBSCAN minimum cluster size (Default: 100)""")
+    parser.add_argument(
+        "--compute_hdbscan_clusters", action="store_true", dest="compute_hdbscan_clusters", default=True,
+        help="""Compute HDBSCAN clusters and store in the tagged directory (Default: True)""")
+    parser.add_argument(
+        "--save_clusterer", action="store_true", dest="save_clusterer", default=True,
+        help="""Save the clusterer to assign cluster labels to new points (Default: True)""")
     parser.add_argument(
         "--seed", type=int, action="store", dest="seed", default=14730219,
         help="""Initialize random state with this seed. Default is Nicolaus Copernicus' birthday""")
     parser.add_argument(
-        "--verbose", type=bool, action="store", dest="verbose", default=False,
+        "--verbose", action="store_true", dest="verbose", default=False,
         help="""Verbose output""")
 
     arguments = parser.parse_args()
 
-    dataset = pa.parquet.read_table(source=arguments.dataset).to_pandas()
+    #check for incompatible flags
+    if arguments.ref_embed_dir is not None:
+        if arguments.pca_n_components is not None:
+            print("ERROR: setting '--pca_n_components' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
+        if arguments.umap_n_components != parser.get_default('umap_n_components'):
+            print("ERROR: setting '--umap_n_components' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
+        if arguments.umap_n_neighbors != parser.get_default('umap_n_neighbors'):
+            print("ERROR: setting '--umap_n_neighbors' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
+        if arguments.umap_min_dist != parser.get_default('umap_min_dist'):
+            print("ERROR: setting '--umap_min_dist' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
+        if arguments.umap_init != parser.get_default('umap_init'):
+            print("ERROR: setting '--umap_init' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
+        if arguments.compute_hdbscan_clusters != parser.get_default('compute_hdbscan_clusters'):
+            print("ERROR: setting '--compute_hdbscan_clusters' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
+        if arguments.save_clusterer != parser.get_default('save_clusterer'):
+            print("ERROR: setting '--save_clusterer' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
+
+
+    random_state = np.random.RandomState(seed=arguments.seed)
+
+    if arguments.columns is not None:
+        with open(arguments.columns, 'r') as f:
+            columns = f.read()[:-1].split("\n")
+        if arguments.verbose:
+            print("Loading '{}' columns".format(len(columns)))
+    else:
+        columns = None
+
+    dataset = pa.parquet.read_table(
+        source=arguments.dataset,
+        columns=columns,
+    ).to_pandas()
+
+    if arguments.random_subset is not None and arguments.random_subset < dataset.shape[0]:
+        if arguments.verbose:
+            print("Using a random subset of '{}' rows.".format(arguments.random_subset))
+        sample_indices = np.random.choice(dataset.shape[0], arguments.random_subset, replace=False)
+        dataset = dataset.iloc[sample_indices]
 
     if arguments.ref_embed_dir is not None:
         if arguments.verbose:
             print("Emebedding dataset in reference UMAP {} ...".format(arguments.ref_embed_dir))
-
+        embed_dir = "intermediate_data/{}".format(arguments.tag)
         umap_embedding = embedding.embed(
             dataset=dataset,
-            embed_dir="intermediate_data/{}".format(arguments.tag),
+            embed_dir=embed_dir,
             ref_embed_dir="{}".format(arguments.ref_embed_dir),
             verbose=arguments.verbose)
+
+        clusterer_fname = "intermediate_data/{}/hdbscan_cluster_min{}.joblib".format(
+            arguments.ref_embed_dir, arguments.hdbscan_min_cluster_size)
+        try:
+            clusterer = joblib.load(clusterer_fname)
+        except:
+            if verbose:
+               print("HDBSCAN Clusterer not found at {}, assume no-clusterer was created".format(clusterer_fname))
+            clusterer = None
+        if clusterer:
+            cluster_labels = clusterer.predict(umap_embedding)
+            cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
+            pa.parquet.write_table(
+                table=pa.Table.from_pandas(cluster_labels),
+                where="intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hdbscan_min_cluster_size))
+
     else:
         if arguments.verbose:
             print("Computing UMAP embedding ...")
 
+        embed_dir = "intermediate_data/{}".format(arguments.tag)
+
         umap_embedding = embedding.fit_embedding(
             dataset=dataset,
-            embed_dir="intermediate_data/{}".format(arguments.tag),
+            embed_dir=embed_dir,
+            standardize_features=arguments.standardize_features,
             pca_n_components=arguments.pca_n_components,
             umap_n_components=arguments.umap_n_components,
             umap_init=arguments.umap_init,
             umap_n_neighbors=arguments.umap_n_neighbors,
             umap_min_dist=arguments.umap_min_dist,
+            save_transform=argument.save_transform,
             seed=arguments.seed,
             verbose=arguments.verbose)
+
+
+        if arguments.compute_hdbscan_clusters:
+            if arguments.verbose:
+                print("Computing HDBSCAN clusters ...")
+            clusterer = hdbscan.HDBSCAN(min_cluster_size=arguments.hdbscan_min_cluster_size)
+            cluster_labels = clusterer.fit_predict(umap_embedding)
+            cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
+            if arguments.save_clusterer:
+                clusterer_path = "intermediate_data/{}/hdbscan_clusterer_min{}.joblib".format(
+                        arguments.tag, arguments.hdbscan_min_cluster_size)
+                if arguments.verbose:
+                    print("Saving HDBSCAN clusterer to {} ...".format(clusterer_path))
+                joblib.dump(value=clusterer, filename=clusterer_path)
+            pa.parquet.write_table(
+                table=pa.Table.from_pandas(cluster_labels),
+                where="intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hdbscan_min_cluster_size))
+
+
+    if arguments.random_subset is not None:
+        with open("{}/sample_indices.tsv".format(embed_dir), 'w') as f:
+            f.write("\n".join(map(str,sample_indices)))
 
     embedding.plot_embedding(
         embedding=umap_embedding,
         output_fname="product/figures/{}_embedding.png".format(arguments.tag))
 
-    if arguments.compute_hbscan_clusters:
-        if arguments.verbose:
-            print("Computing HBSCAN clusters ...")
-        clusterer = hdbscan.HDBSCAN(min_cluster_size=arguments.hbscan_min_cluster_size)
-        cluster_labels = clusterer.fit_predict(umap_embedding)
-        cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
-        joblib.dump(
-            value=clusterer,
-            filename="intermediate_data/{}/hdbscan_clusterer_min{}.joblib".format(
-                arguments.tag, arguments.hbscan_min_cluster_size ))
-        pa.parquet.write_table(
-            table=pa.Table.from_pandas(cluster_labels),
-            where="intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hbscan_min_cluster_size))
+
 
 if __name__ == "__main__":
     main(sys.argv)

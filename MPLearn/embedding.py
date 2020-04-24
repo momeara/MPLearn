@@ -9,6 +9,7 @@ import joblib
 import pyarrow.parquet
 import pyarrow as pa
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import (PCA, IncrementalPCA)
 import umap
 import pandas as pd
@@ -20,12 +21,14 @@ from colorcet import fire
 def fit_embedding(
 	dataset,
 	embed_dir,
+	standardize_features=True,
 	pca_n_components=None,
 	umap_n_components=2,
 	umap_init='random',
 	umap_n_neighbors=100,
 	umap_min_dist=0.0,
 	umap_metric='euclidean',
+	save_transform=True,
 	seed=None,
 	verbose=True):
 	"""
@@ -48,10 +51,18 @@ def fit_embedding(
 	random_state = np.random.RandomState(seed=seed)
 
 	begin_time = time.time()
-	if pca_n_components is not None:
+
+	if standardize_features:
+		if verbose:
+			print("Standardizing dataset so each feature has zero-mean and unit variance.")
+		standardizer = StandardScaler(copy=False)
+		standardizer.fit(dataset)
+		dataset = standardizer.transform(dataset)
+
+	if pca_n_components is None:
 		pca_n_components = dataset.shape[1]
 		if verbose:
-		    print("Setting PCA n_componets to full rank of dataset: {}".format(pca_n_components))
+			print("Setting PCA n_componets to full rank of dataset: {}".format(pca_n_components))
 
 	if verbose:
 		print("Reducing the dimension by PCA from {} to {} dimensions".format(dataset.shape[1], pca_n_components))
@@ -85,6 +96,7 @@ def fit_embedding(
 		f.write("key\tvalue\n")
 		f.write("seed\t{}\n".format(seed))
 		f.write("input_dim\t{}\n".format(dataset.shape))
+		f.write("standardize_features\t{}\n".format(standardize_features))
 		f.write("pca_n_component\t{}\n".format(pca_n_components))
 		f.write("umap_n_component\t{}\n".format(umap_n_components))
 		f.write("umap_metric\t{}\n".format(umap_metric))
@@ -92,14 +104,21 @@ def fit_embedding(
 		f.write("umap_min_dist\t{}\n".format(umap_min_dist))
 		f.write("umap_init\t{}\n".format(umap_init))
 
-	if pca_n_components is not None:
+	if save_transform:
+		if verbose:
+			print("Saving transform to {}.".format(embed_dir))
+		if pca_n_components is not None:
+			joblib.dump(
+				value=pca_reducer,
+				filename="{}/pca_reducer.joblib".format(embed_dir))
+		if standardize_features:
+			joblib.dump(
+				value=standardizer,
+				filename="{}/standardizer.joblib".format(embed_dir))
 		joblib.dump(
-			value=pca_reducer,
-			filename="{}/pca_reducer.joblib".format(embed_dir))
+			value=umap_reducer,
+			filename="{}/umap_reducer.joblib".format(embed_dir))
 
-	joblib.dump(
-		value=umap_reducer,
-		filename="{}/umap_reducer.joblib".format(embed_dir))
 	pa.parquet.write_table(
 		table=pa.Table.from_pandas(umap_embedding),
 		where="{}/umap_embedding.parquet".format(embed_dir))
@@ -122,15 +141,26 @@ def embed(
 
 	begin_time = time.time()
 	if verbose:
-		print("Loading reference PCA->UMAP reducer from embd_dir {} ...".format(ref_embed_dir))
+		print("Loading standardizer from embed_dir {} ...".format(ref_embed_dir))
+	try:
+		standardizer = joblib.load(filename="{}/standardizer.joblib".format(ref_embed_dir))
+	except:
+		if verbose:
+			print("Standardizer not found at '{}/standardizer.joblib', assume no-prestandardization is needed".format(ref_embed_dir))
+
+	if verbose:
+		print("Loading reference PCA->UMAP reducer from embed_dir {} ...".format(ref_embed_dir))
 	try:
 		pca_reducer = joblib.load(filename="{}/pca_reducer.joblib".format(ref_embed_dir))
 	except:
 		if verbose:
-			print("PCA Reducer not found at '{}/pca_reducer.joblib', assume no pre-dimensionality reduction by PCA".format(embed_dir))
+			print("PCA Reducer not found at '{}/pca_reducer.joblib', assume no pre-dimensionality reduction by PCA".format(ref_embed_dir))
 		pca_reducer = None
 
 	umap_reducer = joblib.load(filename="{}/umap_reducer.joblib".format(ref_embed_dir))
+
+	if standardizer:
+		dataset = standardizer.transform(dataset)
 
 	if pca_reducer:
 		pca_embedding = pca_reducer.transform(dataset)
@@ -199,15 +229,15 @@ def plot_embedding_labels(
 
 
 def load_embedding(experiment_path, embedding_tag, meta_columns=['Condition', 'Concentration']):
-    """load cell embedding from an embed_umap run
+	"""load cell embedding from an embed_umap run
 
-    Returns: pd.DataFrame with for each cell in <experiment> with columns:
-             <meta_columns> UMAP_1 ... cluster_label
-    """
-    cell_meta = pa.parquet.read_table(source="{}/intermediate_data/cell_meta.parquet".format(experiment_path)).to_pandas()
-    cell_meta = cell_meta[meta_columns]
-    embed_dir = "{}/intermediate_data/{}".format(experiment_path, embedding_tag)
-    embedding = pa.parquet.read_table(source="{}/umap_embedding.parquet".format(embed_dir)).to_pandas()
-    cluster_labels = pa.parquet.read_table("{}/hdbscan_clustering_min100.parquet".format(embed_dir)).to_pandas()
-    embedding = pd.concat([cell_meta, embedding, cluster_labels], axis=1)
-    return embedding
+	Returns: pd.DataFrame with for each cell in <experiment> with columns:
+			 <meta_columns> UMAP_1 ... cluster_label
+	"""
+	cell_meta = pa.parquet.read_table(source="{}/intermediate_data/cell_meta.parquet".format(experiment_path)).to_pandas()
+	cell_meta = cell_meta[meta_columns]
+	embed_dir = "{}/intermediate_data/{}".format(experiment_path, embedding_tag)
+	embedding = pa.parquet.read_table(source="{}/umap_embedding.parquet".format(embed_dir)).to_pandas()
+	cluster_labels = pa.parquet.read_table("{}/hdbscan_clustering_min100.parquet".format(embed_dir)).to_pandas()
+	embedding = pd.concat([cell_meta, embedding, cluster_labels], axis=1)
+	return embedding

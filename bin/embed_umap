@@ -149,12 +149,12 @@ def main(argv):
             ref_embed_dir="{}".format(arguments.ref_embed_dir),
             verbose=arguments.verbose)
 
-        clusterer_fname = "intermediate_data/{}/hdbscan_cluster_min{}.joblib".format(
+        clusterer_fname = "{}/hdbscan_cluster_min{}.joblib".format(
             arguments.ref_embed_dir, arguments.hdbscan_min_cluster_size)
         try:
             clusterer = joblib.load(clusterer_fname)
         except:
-            if verbose:
+            if arguments.verbose:
                print("HDBSCAN Clusterer not found at {}, assume no-clusterer was created".format(clusterer_fname))
             clusterer = None
         if clusterer:
@@ -179,7 +179,7 @@ def main(argv):
             umap_init=arguments.umap_init,
             umap_n_neighbors=arguments.umap_n_neighbors,
             umap_min_dist=arguments.umap_min_dist,
-            save_transform=argument.save_transform,
+            save_transform=arguments.save_transform,
             seed=arguments.seed,
             verbose=arguments.verbose)
 

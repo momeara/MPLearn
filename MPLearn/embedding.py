@@ -177,10 +177,11 @@ def embed(
 
 	if verbose:
 		print("Copying model info from reference embed dir.")
+
 	try:
 		shutil.copyfile(
-			source="{}/model_info.tsv".format(ref_embed_dir),
-			destination="{}/model_info.tsv".format(embed_dir))
+			src="{}/model_info.tsv".format(ref_embed_dir),
+			dst="{}/model_info.tsv".format(embed_dir))
 	except:
 		print("WARNING: Failed to copy reference model info from '{}/model_info.tsv' to '{}/model_info.tsv'".format(ref_embed_dir, embed_dir))
 

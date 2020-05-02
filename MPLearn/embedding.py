@@ -28,6 +28,7 @@ def fit_embedding(
 	umap_n_neighbors=100,
 	umap_min_dist=0.0,
 	umap_metric='euclidean',
+	low_memory=False,
 	save_transform=True,
 	seed=None,
 	verbose=True):
@@ -81,7 +82,8 @@ def fit_embedding(
 		n_neighbors=umap_n_neighbors,
 		min_dist=umap_min_dist,
 		init=umap_init,
-		random_state=random_state,
+		low_memory=low_memory,
+		#random_state=random_state,
 		verbose=True)
 	umap_embedding = umap_reducer.fit_transform(pca_embedding)
 	umap_embedding = pd.DataFrame(
@@ -129,6 +131,7 @@ def embed(
 	dataset,
 	embed_dir,
 	ref_embed_dir,
+	batch_size=None,
 	verbose=True):
 	"""
 	Given a previously defined embedding, embed a new dataset into it
@@ -159,15 +162,22 @@ def embed(
 
 	umap_reducer = joblib.load(filename="{}/umap_reducer.joblib".format(ref_embed_dir))
 
-	if standardizer:
-		dataset = standardizer.transform(dataset)
-
-	if pca_reducer:
-		pca_embedding = pca_reducer.transform(dataset)
+	if batch_size is None:
+		n_batches = 1
 	else:
-		pca_embdding = dataset
-
-	umap_embedding = umap_reducer.transform(pca_embedding)
+		n_batches = np.floor(dataset.shape[0]/batch_size)
+	umap_embedding = []
+	for batch_index, batch in enumerate(np.array_split(dataset, n_batches)):
+		if verbose:
+			print("Transforming batch {} of {}".format(batch_index+1, n_batches))
+		if standardizer:
+			batch = standardizer.transform(batch)
+		if pca_reducer:
+			pca_embedding = pca_reducer.transform(batch)
+		else:
+			pca_embdding = batch
+		umap_embedding.append(umap_reducer.transform(pca_embedding))
+	umap_embedding = np.vstack(umap_embedding)
 	umap_embedding = pd.DataFrame(
 		data=umap_embedding,
 		columns=["UMAP_" + str(i+1) for i in range(umap_embedding.shape[1])])

@@ -40,10 +40,10 @@ Embed a 10k subset of cell features given a reference embedding:
 def main(argv):
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
-        "--dataset", type=str, action="store", dest="dataset",
+        "--dataset", nargs="+", type=str, action="store", dest="dataset",
         help="""Path to a parquet table on disk (Required)""")
     parser.add_argument(
-        "--columns", type=str, action="store", dest="columns", default=None,
+        "--feature_columns", type=str, action="store", dest="feature_columns", default=None,
         help="""A file containing columns to read in, one per line (Default: use all columns)""")
     parser.add_argument(
         "--random_subset", type=int, action="store", dest="random_subset", default=None,
@@ -54,6 +54,9 @@ def main(argv):
     parser.add_argument(
         "--ref_embed_dir", type=str, action="store", dest="ref_embed_dir", default=None,
         help="""Directory of previously computed embedding to use to re-embed the given dataset (Default: Do not re-embed)""")
+    parser.add_argument(
+        "--re_embed_batch_size", type=int, action="store", dest="re_embed_batch_size", default=None,
+        help="""When re-embedding, batch the inputs in to subsets of this size (Default: re-embed the whole dataset in a single batch)""")
     parser.add_argument(
         "--standarize_features", type=bool, action="store", dest="standardize_features", default=True,
         help="""Standardize each feature to have mean 0 and unit variance (Default: True)""")
@@ -73,7 +76,10 @@ def main(argv):
         "--umap_init", type=str, action="store", dest="umap_init", default='spectral',
         help="""UMAP initialization. Spectral is preferred, but random is more robust (Default: spectral)""")
     parser.add_argument(
-        "--save_transform", action="store_true", dest="save_transform", default=True,
+        "--umap_low_memory", action="store_true", dest="umap_low_memory", default=False,
+        help="""Use UMAP's low-memory NN-lokup, may be slower (Default: False)""")
+    parser.add_argument(
+        "--save_transform", type=bool, action="store", dest="save_transform", default=True,
         help="""Save the computed embedding transformation to re-embed other points (Default: True)""")
     parser.add_argument(
         "--hdbscan_min_cluster_size", type=int, action="store", dest="hdbscan_min_cluster_size", default=100,
@@ -110,35 +116,62 @@ def main(argv):
         if arguments.umap_init != parser.get_default('umap_init'):
             print("ERROR: setting '--umap_init' is incompatible with setting '--ref_embed_dir'")
             exit(1)
-        if arguments.compute_hdbscan_clusters != parser.get_default('compute_hdbscan_clusters'):
-            print("ERROR: setting '--compute_hdbscan_clusters' is incompatible with setting '--ref_embed_dir'")
+        if arguments.umap_low_memory != parser.get_default('umap_low_memory'):
+            print("ERROR: setting '--umap_low_memory' is incompatible with setting '--ref_embed_dir'")
             exit(1)
-        if arguments.save_clusterer != parser.get_default('save_clusterer'):
-            print("ERROR: setting '--save_clusterer' is incompatible with setting '--ref_embed_dir'")
+        if arguments.save_transform != parser.get_default('save_transform'):
+            print("ERROR: setting '--save_transform' is incompatible with setting '--ref_embed_dir'")
             exit(1)
-
+    else:
+        if arguments.re_embed_batch_size != parser.get_default('re_embed_batch_size'):
+            print("ERROR: setting '--re_embed_batch_size' requires setting '--ref_embed_dir'")
+            exit(1)
 
     random_state = np.random.RandomState(seed=arguments.seed)
 
-    if arguments.columns is not None:
-        with open(arguments.columns, 'r') as f:
-            columns = f.read()[:-1].split("\n")
+    ################
+    # Load dataset #
+    ################
+    if arguments.feature_columns is not None:
+        feature_columns = pd.read_csv(arguments.feature_columns, sep="\t")
         if arguments.verbose:
-            print("Loading '{}' columns".format(len(columns)))
+            print("Loading '{}' columns".format(feature_columns.shape[0]))
     else:
-        columns = None
+        feature_columns = None
 
-    dataset = pa.parquet.read_table(
-        source=arguments.dataset,
-        columns=columns,
-    ).to_pandas()
+    dataset = []
+    for dataset_path in arguments.dataset:
+        if arguments.verbose:
+            print("Reading in dataset '{}'...".format(dataset_path))
+        dataset.append(pa.parquet.read_table(
+            source=dataset_path,
+            columns=feature_columns['feature'],
+        ).to_pandas())
+    dataset = pd.concat(dataset, axis=0)
+    if arguments.feature_columns is not None:
+        if arguments.verbose:
+            print("Transforming individual features ...")
+        for i in range(feature_columns.shape[0]):
+            feature = feature_columns['feature'][i]
+            transform = feature_columns['transform'][i]
+            if transform == 'identity':
+                pass
+            elif transform == 'log':
+                dataset[feature] = np.log(dataset[feature])
+            elif transform == 'log1p':
+                dataset[feature] = np.log1p(dataset[feature])
+            else:
+                raise Exception("Unrecognized tranform '{}' for feature column '{}' in passed argument --feature_columns '{}'".format(transform, feature, argumnets.feature_columns))
 
     if arguments.random_subset is not None and arguments.random_subset < dataset.shape[0]:
         if arguments.verbose:
-            print("Using a random subset of '{}' rows.".format(arguments.random_subset))
+            print("Using a random subset of '{}' of the total '{}' rows.".format(arguments.random_subset, dataset.shape[0]))
         sample_indices = np.random.choice(dataset.shape[0], arguments.random_subset, replace=False)
         dataset = dataset.iloc[sample_indices]
 
+    #####################
+    # Compute Embedding #
+    #####################
     if arguments.ref_embed_dir is not None:
         if arguments.verbose:
             print("Emebedding dataset in reference UMAP {} ...".format(arguments.ref_embed_dir))
@@ -147,6 +180,7 @@ def main(argv):
             dataset=dataset,
             embed_dir=embed_dir,
             ref_embed_dir="{}".format(arguments.ref_embed_dir),
+            batch_size=arguments.re_embed_batch_size,
             verbose=arguments.verbose)
 
         clusterer_fname = "{}/hdbscan_cluster_min{}.joblib".format(
@@ -158,7 +192,7 @@ def main(argv):
                print("HDBSCAN Clusterer not found at {}, assume no-clusterer was created".format(clusterer_fname))
             clusterer = None
         if clusterer:
-            cluster_labels = clusterer.predict(umap_embedding)
+            cluster_labels = hdbscan.approximate_predict(clustrer, umap_embedding)
             cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
             pa.parquet.write_table(
                 table=pa.Table.from_pandas(cluster_labels),
@@ -179,6 +213,7 @@ def main(argv):
             umap_init=arguments.umap_init,
             umap_n_neighbors=arguments.umap_n_neighbors,
             umap_min_dist=arguments.umap_min_dist,
+            low_memory=arguments.umap_low_memory,
             save_transform=arguments.save_transform,
             seed=arguments.seed,
             verbose=arguments.verbose)
@@ -187,7 +222,9 @@ def main(argv):
         if arguments.compute_hdbscan_clusters:
             if arguments.verbose:
                 print("Computing HDBSCAN clusters ...")
-            clusterer = hdbscan.HDBSCAN(min_cluster_size=arguments.hdbscan_min_cluster_size)
+            clusterer = hdbscan.HDBSCAN(
+                min_cluster_size=arguments.hdbscan_min_cluster_size,
+                prediction_data=True)
             cluster_labels = clusterer.fit_predict(umap_embedding)
             cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
             if arguments.save_clusterer:

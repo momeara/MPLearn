@@ -58,7 +58,7 @@ def main(argv):
         "--re_embed_batch_size", type=int, action="store", dest="re_embed_batch_size", default=None,
         help="""When re-embedding, batch the inputs in to subsets of this size (Default: re-embed the whole dataset in a single batch)""")
     parser.add_argument(
-        "--standarize_features", type=bool, action="store", dest="standardize_features", default=True,
+        "--no_standarize_features", action="store_false", dest="standardize_features", default=True,
         help="""Standardize each feature to have mean 0 and unit variance (Default: True)""")
     parser.add_argument(
         "--pca_n_components", type=int, action="store", dest="pca_n_components", default=None,
@@ -79,16 +79,16 @@ def main(argv):
         "--umap_low_memory", action="store_true", dest="umap_low_memory", default=False,
         help="""Use UMAP's low-memory NN-lokup, may be slower (Default: False)""")
     parser.add_argument(
-        "--save_transform", type=bool, action="store", dest="save_transform", default=True,
+        "--no_save_transform", action="store_false", dest="save_transform", default=True,
         help="""Save the computed embedding transformation to re-embed other points (Default: True)""")
     parser.add_argument(
         "--hdbscan_min_cluster_size", type=int, action="store", dest="hdbscan_min_cluster_size", default=100,
         help="""HDBSCAN minimum cluster size (Default: 100)""")
     parser.add_argument(
-        "--compute_hdbscan_clusters", action="store_true", dest="compute_hdbscan_clusters", default=True,
+        "--no_compute_hdbscan_clusters", action="store_false", dest="compute_hdbscan_clusters", default=True,
         help="""Compute HDBSCAN clusters and store in the tagged directory (Default: True)""")
     parser.add_argument(
-        "--save_clusterer", action="store_true", dest="save_clusterer", default=True,
+        "--no_save_clusterer", action="store_false", dest="save_clusterer", default=True,
         help="""Save the clusterer to assign cluster labels to new points (Default: True)""")
     parser.add_argument(
         "--seed", type=int, action="store", dest="seed", default=14730219,
@@ -146,7 +146,7 @@ def main(argv):
         dataset.append(pa.parquet.read_table(
             source=dataset_path,
             columns=feature_columns['feature'],
-        ).to_pandas())
+        ).to_pandas().astype('float32'))
     dataset = pd.concat(dataset, axis=0)
     if arguments.feature_columns is not None:
         if arguments.verbose:
@@ -206,7 +206,6 @@ def main(argv):
             print("Computing UMAP embedding ...")
 
         embed_dir = "intermediate_data/{}".format(arguments.tag)
-
         umap_embedding = embedding.fit_embedding(
             dataset=dataset,
             embed_dir=embed_dir,

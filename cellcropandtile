@@ -1,0 +1,143 @@
+from PIL import Image,ImageDraw
+import boto3
+import mysql.connector
+import numpy as np
+import matplotlib as mpl
+from matplotlib import cm
+
+#Define function for reading the images from the s3 bucket
+def read_image_from_s3(bucket, key, saturation):
+
+    s3 = boto3.resource('s3', region_name='us-east-1')
+    bucket = s3.Bucket(bucket)
+    object = bucket.Object(key)
+    response = object.get()
+    file_stream = response['Body']
+    im = Image.open(file_stream, mode="r")
+    im2 = im.point(lambda argument: argument*saturation)
+    return im2
+
+#Define function for adding colormaps to images
+def colormap(img, cmap):
+    cm = mpl.cm.get_cmap(cmap)
+    im = np.array(img)
+    im = cm(im)
+    im = np.uint8(im * 255)
+    im2 = Image.fromarray(im)
+    return im2
+
+#Required Variables
+barcode = '2008A'
+welliD = '0170'
+fieldiD = '0009'
+cellnumber = '137'
+channelnames = ('hoe','lipid','virus','cmo')
+channelsaturation=(0.20,0.50,0.15,0.13)
+channelcmap = ('Blues','Greens','viridis','inferno')
+tilesize = 150
+
+#Connect to database
+mydb = mysql.connector.connect(
+    host='covid19primary.cgymeokijgns.us-east-1.rds.amazonaws.com',
+    user='covid19primary',
+    passwd='frightful-bootlace-Cats-flaring8',
+    database='covid19cq1'
+)
+
+#database query1 from the _Per_Image table
+mycursor = mydb.cursor()
+mycursor.execute(f'SELECT * FROM covid19cq1.SARS_{barcode}_Per_Image WHERE Image_Metadata_WellID = {welliD} AND Image_Metadata_FieldID = {fieldiD};')
+for x in mycursor:
+    print (x)
+    imagenumber = x[0]
+    c3filename = x[12]
+    c0filename = x[13]
+    c1filename = x[14]
+    c2filename = x[15]
+    imageheight = x[22]
+    imagewidth = x[75]
+    plateid = x[35]
+
+#database query2 from the _Per_Cells table for x and y coordinates
+mycursor = mydb.cursor()
+mycursor.execute(f'SELECT * FROM covid19cq1.SARS_{barcode}_Per_Cells WHERE ImageNumber = {imagenumber} AND Cells_Number_Object_Number = {cellnumber};')
+for x in mycursor:
+    print (x)
+    centerx = x[3]
+    centery = x[4]
+
+#Pull channel images from s3 bucket
+c0 = read_image_from_s3('sextoncov19',f'CQ1/{plateid}_{barcode}/Projection/{c0filename}', channelsaturation[0])
+c1 = read_image_from_s3('sextoncov19',f'CQ1/{plateid}_{barcode}/Projection/{c1filename}', channelsaturation[1])
+c2 = read_image_from_s3('sextoncov19',f'CQ1/{plateid}_{barcode}/Projection/{c2filename}', channelsaturation[2])
+c3 = read_image_from_s3('sextoncov19',f'CQ1/{plateid}_{barcode}/Projection/{c3filename}', channelsaturation[3])
+
+#x coordinates for crop box if and elif used to check and correct edge cases
+if centerx < 50:
+    x1 = 0
+    x2 = tilesize
+elif centerx + tilesize/2 > imagewidth:
+    x2 = imagewidth
+    x1 = imagewidth - tilesize
+else:
+    x1 = centerx - tilesize/2
+    x2 = x1 + tilesize
+
+#y coordinates for crop box if and elif used to check and correct edge cases
+if centery < 50:
+    y1 = 0
+    y2 = tilesize
+elif centery + tilesize/2 > imageheight:
+    y2 = imageheight
+    y1 = imageheight - tilesize
+else:
+    y1 = centery - tilesize/2
+    y2 = y1 + tilesize
+
+print (x1,y1,x2,y2)
+
+#crop cells from each image
+box=(x1,y1,x2,y2)
+c0tile = c0.crop(box)
+c1tile = c1.crop(box)
+c2tile = c2.crop(box)
+c3tile = c3.crop(box)
+
+#colormaps for tiles
+c0cmap = colormap(c0tile, channelcmap[0])
+c1cmap = colormap(c1tile, channelcmap[1])
+c2cmap = colormap(c2tile, channelcmap[2])
+c3cmap = colormap(c3tile, channelcmap[3])
+
+
+#Uncomment to see any of the specific tiles
+#c0tile.show()
+#c1tile.show()
+#c2tile.show()
+#c3tile.show()
+
+#COnstruct Montage
+montage = Image.new('RGB',(tilesize*2,tilesize*2+20))
+
+#Set tile regions
+tileregion1 = (0,10,tilesize, tilesize+10)
+tileregion2 = (tilesize,10,tilesize*2, tilesize+10)
+tileregion3 = (0,tilesize+10,tilesize, tilesize*2+10)
+tileregion4 = (tilesize, tilesize+10,tilesize*2, tilesize*2+10)
+
+#add tiles to montage
+montage.paste(c0cmap, tileregion1)   #channel1
+montage.paste(c1cmap, tileregion2)   #channel2
+montage.paste(c2cmap, tileregion3)   #channel3
+montage.paste(c3cmap, tileregion4)   #channel4
+#montage.show()
+
+#add channel labels
+labels = ImageDraw.Draw(montage)
+labels.text((0,0), channelnames[0], fill=('white'))                    #channel 0
+labels.text((tilesize,0), channelnames[1], fill=('white'))             #channel 1
+labels.text((0,tilesize*2+10), channelnames[2], fill=('white'))        #channel 2
+labels.text((tilesize,tilesize*2+10), channelnames[3], fill=('white')) #channel 3
+montage.show()
+#montage.save(f'{barcode}_W{welliD}_F{fieldiD}_Cell_{cellnumber}.png')
+

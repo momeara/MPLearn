@@ -58,7 +58,7 @@ def main(argv):
         "--re_embed_batch_size", type=int, action="store", dest="re_embed_batch_size", default=None,
         help="""When re-embedding, batch the inputs in to subsets of this size (Default: re-embed the whole dataset in a single batch)""")
     parser.add_argument(
-        "--no_standarize_features", action="store_false", dest="standardize_features", default=True,
+        "--no_standardize_features", action="store_false", dest="standardize_features", default=True,
         help="""Standardize each feature to have mean 0 and unit variance (Default: True)""")
     parser.add_argument(
         "--pca_n_components", type=int, action="store", dest="pca_n_components", default=None,

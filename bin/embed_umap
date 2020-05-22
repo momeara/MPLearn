@@ -195,7 +195,7 @@ def main(argv):
                print("HDBSCAN Clusterer not found at {}, assume no-clusterer was created".format(clusterer_fname))
             clusterer = None
         if clusterer:
-            cluster_labels = hdbscan.approximate_predict(clustrer, umap_embedding)
+            cluster_labels = hdbscan.approximate_predict(clusterer, umap_embedding)
             cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
             pa.parquet.write_table(
                 table=pa.Table.from_pandas(cluster_labels),

@@ -8,6 +8,8 @@ install_prereqs:
 	conda install -c conda-forge holoviews
 	conda install -c conda-forge pyviz panel
 	conda install -c conda-forge pyarrow
+	conda install -c conda-forge boto3
+	conda install -c conda-forge mysql
 
 
 	# make jupyter lab work with holoviews
@@ -21,11 +23,11 @@ install:
 	python setup.py install
 
 install_extras:
-
 	# install STREAM
 	# conda install -c bioconda fails because with wrong version of python error:
         # stream -> python[version='>=3.5,<3.6.0a0|>=3.6,<3.7.0a0|>=3.7,<3.8.0a0']
         conda install rpy2
+	conda install -c conda-forge leidenalg
         conda install -c conda-forge shapely
         conda install -c conda-forge seaborn
         conda install -c conda-forge statsmodels

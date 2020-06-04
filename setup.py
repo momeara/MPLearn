@@ -14,6 +14,7 @@ setup(
         'numpy>=1.12.1',
         'six>=1.10.0'],
     extras_require={
+        'boto3' : ['boto3>=1.13.15'],
         'bokeh' : ['bokeh>=1.0.0'],
         'dask' : ['dask>=0.19.1'],
         'joblib' : ['0.12.5'],        
@@ -21,6 +22,7 @@ setup(
         'distributed' : ['distributed>=1.23.1'],
         'holovoiews' : ['holoviews>=1.10.9'],
         'pandas' : ['pandas>=1.0.1'],
+        'mysql' : ['mysql>=5.7.20'],
         'umap-learn' : ['umap-learn>0.3.6'],
     },
     scripts=['bin/embed_umap'],

@@ -35,6 +35,10 @@ from shapely.prepared import prep
 
 
 def initialize_notebook():
+    """
+    Initialize Notebook to have width 100% and hide logos and banners
+    """
+
     output_notebook(hide_banner=True)
     holoviews.extension('bokeh', logo=False)
     display(HTML("<style>.container { width:100% !important; }</style>"))
@@ -117,9 +121,6 @@ def load_single_embedding(
     return embedding
 
 
-
-
-
 def view_UMAP(
         embedding,
         label='',
@@ -150,7 +151,6 @@ def view_UMAP(
 def save_embedding_plot(
         embedding,
         output_fname,
-        label='',
         inv_color=False,
         color_pallet=viridis,
         background_color="",
@@ -158,7 +158,7 @@ def save_embedding_plot(
         plot_height=400):
     canvas = datashader.Canvas(
         plot_width=plot_width,
-        plot_height=plot_height).points(embedding, 'UMAP_1', 'UMAP_2', label=label)
+        plot_height=plot_height).points(embedding, 'UMAP_1', 'UMAP_2')
     canvas = datashader.transfer_functions.shade(canvas, cmap=color_pallet)
     if (background_color is None) and not inv_color:
         canvas = datashader.transfer_functions.set_background(canvas, background_color)
@@ -244,57 +244,74 @@ def view_UMAP_ROIs(
 
 
 
-def select_condition_on_UMAP(
+def view_UMAP_select_condition(
         embedding,
-        parameter,
+        condition,
         default_value=None,
         label=''):
-    parameter = 'Compound' # also change in points.select(...)
+    """
+    In a notebook, plot an embedding and dynamically be able to select a subset of data to show
 
-    if parameter not in embedding.columns:
+    Example:
+        embedding = load_single_embedding(..., meta_columns = ['Compound'])
+        view_UMAP_select_condition(
+            embedding=embedding,
+            condition="Compound")
+
+    Arguments:
+         embedding:
+             pandas DataFrame with columns ["UMAP_1", "UMAP_2", <parameter>]
+             each row represents a cell with coordinates and condition <condition>
+         condition:
+             column of the embedding to condition on
+         default_value:
+             value of the condition column to be used as the default
+             if not given, use the first value.
+         label:
+             add a label to the plot
+    """
+
+    if condition not in embedding.columns:
         print(
-            f"ERROR: parameter {parameter} is not a column in the embedding dataframe:",
+            f"ERROR: condition {condition} is not a column in the embedding dataframe:",
             f"{embedding.columns}")
 
-    parameter_values = embedding[parameter].unique()
+    condition_values = embedding[condition].unique()
 
     if default_value is None:
-        default_value = parameter_values[0]
+        default_value = condition_values[0]
 
-    class EmbedMap(param.Parameterized):
-        condition = param.ObjectSelector(default=default_value, objects=parameter_values)
+    class EmbedPlot(param.Parameterized):
+        """Hold state for the plot"""
+        condition = param.ObjectSelector(default=default_value, objects=condition_values)
         @param.depends('condition')
         def points(self):
             points = holoviews.Points(embedding, kdims=['UMAP_1', 'UMAP_2'])
             args = {}
-            args[parameter] = self.condition
+            args[condition] = self.condition
             points = points.select(**args)
             return points
 
         def view(self, **kwargs):
             points = holoviews.DynamicMap(self.points)
-            map = rasterize(points)
-            map = shade(map, cmap=viridis, min_alpha=10)
-            map = dynspread(map, threshold=0.4)
-            map = map.options(bgcolor='black')
-            return map
+            plot = rasterize(points)
+            plot = shade(plot, cmap=viridis, min_alpha=10)
+            plot = dynspread(plot, threshold=0.4)
+            plot = plot.options(bgcolor='black')
+            return plot
 
-    embed_map = EmbedMap(name=label)
-    pn.Row(embed_map.param, embed_map.view()).servable()
-
-
+    embed_plot = EmbedPlot(name=label)
+    embed_plot = pn.Row(embed_plot.param, embed_plot.view()).servable()
+    return embed_plot
 
 def draw_regions_of_interest(
-        line_width=3,
-
-):
+        line_width=3):
     path_layer = holoviews.Path([])
     regions_of_interest = holoviews.streams.FreehandDraw(source=path_layer)
     path_layer.opts(holoviews.opts.Path(
         active_tools=['freehand_draw'],
         height=300, width=300, line_width=line_width))
     return path_layer, regions_of_interest
-
 
 def get_ROI_membership(
         regions_of_interest,
@@ -321,7 +338,6 @@ def get_ROI_membership(
         roi_membership.append(
             points.apply(func=is_member, axis=1).rename("roi_{}".format(roi_index)))
     return pd.concat(roi_membership, axis=1)
-
 
 def save_regions_of_interest(
         regions_of_interest,

@@ -18,19 +18,19 @@ from colorcet import fire
 
 
 def fit_embedding(
-    dataset,
-    embed_dir,
-    standardize_features=True,
-    pca_n_components=None,
-    umap_n_components=2,
-    umap_init='random',
-    umap_n_neighbors=100,
-    umap_min_dist=0.0,
-    umap_metric='euclidean',
-    low_memory=False,
-    save_transform=True,
-    seed=None,
-    verbose=True):
+        dataset,
+        embed_dir,
+        standardize_features=True,
+        pca_n_components=None,
+        umap_n_components=2,
+        umap_init='random',
+        umap_n_neighbors=100,
+        umap_min_dist=0.0,
+        umap_metric='euclidean',
+        low_memory=False,
+        save_transform=True,
+        seed=None,
+        verbose=True):
     """
     train_set: a feature matrix e.g. of (N, F) dimensions, used to define the embedding
     After some experimentation with chemical features of 1024 of 50k-.5M compounds,
@@ -67,7 +67,7 @@ def fit_embedding(
     if verbose:
         print("Reducing the dimension by PCA from {} to {} dimensions".format(dataset.shape[1], pca_n_components))
     pca_reducer = IncrementalPCA(
-        n_components = pca_n_components,
+        n_components=pca_n_components,
         batch_size=1000,
         copy=False)
     pca_reducer.fit(dataset)
@@ -128,12 +128,12 @@ def fit_embedding(
 
 
 def embed(
-    dataset,
-    embed_dir,
-    ref_embed_dir,
-    standardize_features=None,
-    batch_size=None,
-    verbose=True):
+        dataset,
+        embed_dir,
+        ref_embed_dir,
+        standardize_features=None,
+        batch_size=None,
+        verbose=True):
     """
     Given a previously defined embedding, embed a new dataset into it
     """

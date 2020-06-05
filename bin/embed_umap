@@ -11,7 +11,10 @@ import pyarrow as pa
 import joblib
 import numpy as np
 from MPLearn import embedding
+from MPLearn import embedding_notebook
 import hdbscan
+
+
 
 DESCRIPTION = """Do the embedding for one dataset with one set of parameters
 version 0.0.1
@@ -185,7 +188,7 @@ def main(argv):
         umap_embedding = embedding.embed(
             dataset=dataset,
             embed_dir=embed_dir,
-			standardize_features=arguments.standardize_features,
+            standardize_features=arguments.standardize_features,
             ref_embed_dir="{}".format(arguments.ref_embed_dir),
             batch_size=arguments.re_embed_batch_size,
             verbose=arguments.verbose)
@@ -196,14 +199,16 @@ def main(argv):
             clusterer = joblib.load(clusterer_fname)
         except:
             if arguments.verbose:
-               print("HDBSCAN Clusterer not found at {}, assume no-clusterer was created".format(clusterer_fname))
+                print((
+                    f"HDBSCAN Clusterer not found at {clusterer_fname}, "
+                    f"assume no-clusterer was created"))
             clusterer = None
         if clusterer:
             cluster_labels = hdbscan.approximate_predict(clusterer, umap_embedding)
             cluster_labels = pd.DataFrame(cluster_labels, columns=['cluster_label'])
             pa.parquet.write_table(
                 table=pa.Table.from_pandas(cluster_labels),
-                where="intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hdbscan_min_cluster_size))
+                where=("intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hdbscan_min_cluster_size)))
 
     else:
         if arguments.verbose:
@@ -248,7 +253,7 @@ def main(argv):
         with open("{}/sample_indices.tsv".format(embed_dir), 'w') as f:
             f.write("\n".join(map(str, sample_indices)))
 
-    embedding.plot_embedding(
+    embedding_notebook.save_embedding_plot(
         embedding=umap_embedding,
         output_fname="product/figures/{}_embedding.png".format(arguments.tag))
 

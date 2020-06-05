@@ -10,6 +10,8 @@ install_prereqs:
 	conda install -c conda-forge pyarrow
 	conda install -c conda-forge boto3
 	conda install -c conda-forge mysql
+	conda install -c bokeh selenium
+	conda install phantomjs
 
 
 	# make jupyter lab work with holoviews

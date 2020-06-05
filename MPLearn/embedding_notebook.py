@@ -313,6 +313,41 @@ def draw_regions_of_interest(
         height=300, width=300, line_width=line_width))
     return path_layer, regions_of_interest
 
+
+def plot_ROI_paths(
+        regions_of_interest,
+        label_color='red'):
+    """
+    Create Holoview layers for showing regions of interest
+
+    """
+    n_roi = len(regions_of_interest.data['xs'])
+    paths = {}
+    for roi_index in range(n_roi):
+        path_coords = np.array([
+            regions_of_interest.data['xs'][roi_index],
+            regions_of_interest.data['ys'][roi_index]]).T
+        paths[f"ROI {roi_index}"] = holoviews.Curve(path_coords)
+    paths_layer =  holoviews.NdOverlay(paths)
+
+    label_coords = []
+    label_text = []
+    for roi_index in range(n_roi):
+        center_x = np.mean(regions_of_interest.data['xs'][roi_index])
+        center_y = np.mean(regions_of_interest.data['ys'][roi_index])
+        label_coords.append([center_x, center_y])
+        label_text.append(f"ROI {roi_index}")
+    label_coords = np.array(label_coords)
+    labels_layer = holoviews.Labels(
+        {('x','y'): label_coords, 'text': label_text},
+        ['x', 'y'],
+        'text').opts(
+            holoviews.opts.Labels(
+                text_color=label_color))
+    return paths_layer * labels_layer
+
+
+
 def get_ROI_membership(
         regions_of_interest,
         points,

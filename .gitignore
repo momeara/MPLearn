@@ -24,6 +24,7 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+flycheck_*
 
 # Temporary files
 .\#*

@@ -9,7 +9,7 @@ install_prereqs:
 	conda install -c conda-forge pyviz panel
 	conda install -c conda-forge pyarrow
 	conda install -c conda-forge boto3
-	conda install -c conda-forge mysql
+	conda install -c conda-forge mysql-connector-python
 	conda install -c bokeh selenium
 	conda install phantomjs
 

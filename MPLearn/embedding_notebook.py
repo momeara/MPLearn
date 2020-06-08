@@ -304,6 +304,45 @@ def view_UMAP_select_condition(
     embed_plot = pn.Row(embed_plot.param, embed_plot.view()).servable()
     return embed_plot
 
+
+def view_UMAP_instances(
+        embedding,
+        label="",
+        max_n_instances=40,
+        random_state=None):
+    if random_state is None:
+        random_state = np.random.RandomState(seed=14730219)
+
+    dataset = holoviews.Dataset(embedding, ['UMAP_1', 'UMAP_2'])
+    UMAP_1_range = (embedding.UMAP_1.min(), embedding.UMAP_1.max())
+    UMAP_2_range = (embedding.UMAP_2.min(), embedding.UMAP_2.max())
+
+    roi_box = holoviews.Polygons([])
+    roi_box = roi_box.opts(holoviews.opts.Polygons(fill_alpha=0.2, line_color='white'))
+    roi_stream = holoviews.streams.BoxEdit(source=roi_box)
+
+    def cell_table(data):
+        table = None
+        print("Called cell_table")
+        if not data or not any(len(d) for d in data.values()):
+            print("  data is none")
+            selection = dataset.select(UMAP_1=UMAP_1_range, UMAP_2=UMAP_2_range)
+            if len(selection) > max_n_instances:
+                selection = selection.iloc[random_state.choice(len(selection), max_n_instances, False)]
+            table = holoviews.Table(selection)
+            return table
+        data = zip(data['x0'], data['x1'], data['y0'], data['y1'])
+        for i, (x0, x1, y0, y1) in enumerate(data):
+            print("  data is not none")
+            selection = dataset.select(UMAP_1=(x0, x1), UMAP_2=(y0, y1))
+            if len(selection) > max_n_instances:
+                selection = selection.iloc[random_state.choice(len(selection), max_n_instances, False)]
+            table = holoviews.Table(selection)
+        return table
+    dcell_table = holoviews.DynamicMap(cell_table, streams=[roi_stream])
+    embedding_plot = view_UMAP(dataset, label=label)
+    return embedding_plot * roi_box + dcell_table
+
 def draw_regions_of_interest(
         line_width=3):
     path_layer = holoviews.Path([])

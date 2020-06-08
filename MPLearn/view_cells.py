@@ -1,6 +1,7 @@
-# -*- tab-width:4;indent-tabs-mode:t;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
+# -*- tab-width:4;indent-tabs-mode:nil;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
 # vi: set ts=2 noet:
 
+import os
 import PIL
 import PIL.ImageDraw
 import PIL.ImageOps
@@ -9,8 +10,7 @@ import mysql.connector
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
-from matplotlib import cm
-import os
+
 
 
 
@@ -89,16 +89,15 @@ def retrieve_cell_coordinates_from_db(
 
         for dye_index, dye in enumerate(dyes):
             cell_coordinates.append(dict(
-                cell_params.to_dict(),
-                **{
-                "Image_Metadata_PlateID" : values[0],
-                "ImageNumber" : values[1],
-                "Dye" : dye,
-                "Image_FileName" : values[2 + dye_index],
-                "Image_Width" : values[2 + len(dyes) + dye_index],
-                "Image_Height" : values[2 + 2*len(dyes) + dye_index],
-                "Cells_AreaShape_Center_X" : values[2 + 3*len(dyes)],
-                "Cells_AreaShape_Center_Y" : values[2 + 3*len(dyes) + 1]}))
+                cell_params.to_dict(), **{
+				"Image_Metadata_PlateID" : values[0],
+				"ImageNumber" : values[1],
+				"Dye" : dye,
+				"Image_FileName" : values[2 + dye_index],
+				"Image_Width" : values[2 + len(dyes) + dye_index],
+				"Image_Height" : values[2 + 2*len(dyes) + dye_index],
+				"Cells_AreaShape_Center_X" : values[2 + 3*len(dyes)],
+				"Cells_AreaShape_Center_Y" : values[2 + 3*len(dyes) + 1]}))
     cursor.close()
     cell_coordinates = pd.DataFrame(cell_coordinates)
     return cell_coordinates
@@ -240,7 +239,8 @@ def view_cells(
     montages = []
     for cell_index in range(len(cell_ids)):
         cell_images = []
-        print(f"  making image for cell {cell_index}")
+        if verbose:
+            print(f"  making image for cell {cell_index}")
         for dye_index in range(len(dyes)):
             coords = cell_coordinates.iloc[cell_index*n_dyes + dye_index]
             dye_image = dye_images[cell_index*n_dyes + dye_index]

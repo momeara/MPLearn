@@ -323,9 +323,7 @@ def view_UMAP_instances(
 
     def cell_table(data):
         table = None
-        print("Called cell_table")
         if not data or not any(len(d) for d in data.values()):
-            print("  data is none")
             selection = dataset.select(UMAP_1=UMAP_1_range, UMAP_2=UMAP_2_range)
             if len(selection) > max_n_instances:
                 selection = selection.iloc[random_state.choice(len(selection), max_n_instances, False)]
@@ -333,7 +331,6 @@ def view_UMAP_instances(
             return table
         data = zip(data['x0'], data['x1'], data['y0'], data['y1'])
         for i, (x0, x1, y0, y1) in enumerate(data):
-            print("  data is not none")
             selection = dataset.select(UMAP_1=(x0, x1), UMAP_2=(y0, y1))
             if len(selection) > max_n_instances:
                 selection = selection.iloc[random_state.choice(len(selection), max_n_instances, False)]

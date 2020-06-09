@@ -421,8 +421,19 @@ def save_regions_of_interest(
             [roi_index]*len(regions_of_interest.data['xs'][roi_index]),
             regions_of_interest.data['xs'][roi_index],
             regions_of_interest.data['ys'][roi_index]))
-    roi_paths = pd.DataFrame(roi_paths, columns=['roi_index', 'xs', 'yz'])
+    roi_paths = pd.DataFrame(roi_paths, columns=['roi_index', 'xs', 'ys'])
 
     pa.parquet.write_table(
         table=pa.Table.from_pandas(roi_paths),
         where=output_path)
+
+
+def load_regions_of_interest(
+        source="regions_of_interest.parquet"):
+    regions_of_interest = pa.parquet.read_table(source=source).to_pandas()
+    xs, ys = [], []
+    for roi_index in regions_of_interest.roi_index.unique():
+        xs.append(regions_of_interest[regions_of_interest.roi_index == roi_index]['xs'].to_list())
+        ys.append(regions_of_interest[regions_of_interest.roi_index == roi_index]['yz'].to_list())
+    return holoviews.streams.FreehandDraw(
+        data={'xs' : xs, 'ys' : ys})

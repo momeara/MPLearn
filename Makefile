@@ -13,7 +13,6 @@ install_prereqs:
 	conda install -c bokeh selenium
 	conda install phantomjs
 
-
 	# make jupyter lab work with holoviews
         jupyter labextension install jupyterlab_bokeh
         jupyter labextension install @pyviz/jupyterlab_pyviz
@@ -40,6 +39,19 @@ install_extras:
 	pip install tf_nightly-2.2.0.dev20200228-cp38-cp38-manylinux2010_x86_64.whl
 
 	pip install nbdev
+
+
+install_ml_support:
+	pip install git+https://github.com/ae-foster/pyro@infograd-docking
+	pip install lz4
+	pip install tqdm
+	pip install pytorch-lightning
+	conda install -c conda-forge tensorflow
+	conda install -c conda-forge tensorboard
+	conda install -c conda-forge tensorboardx
+	pip install test_tube
+	pip install ipywidgets
+	jupyter nbextension enable --py widgetsnbextension
 
 
 run_Steatosis2020_vignette:

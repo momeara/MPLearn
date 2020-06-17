@@ -8,6 +8,7 @@ import math
 import time
 
 # pytorch libraries
+import numpy as np
 import torch
 from torch.distributions import constraints
 from torch import nn
@@ -27,7 +28,7 @@ from pyro.contrib.oed.differentiable_eig import (
     _differentiable_ace_eig_loss)
 from pyro import poutine
 from pyro.contrib.util import lexpand, rmv
-from pyro.contrib.oed.eig import _eig_from_ape, nce_eig, _ace_eig_loss, nmc_eig, vnmc_eig
+from pyro.contrib.oed.eig import _eig_from_ape, nce_eig, _ace_eig_loss, nmc_eig, vnmc_eig, _safe_mean_terms
 from pyro.util import is_bad
 from pyro.contrib.autoguide import mean_field_entropy
 
@@ -37,7 +38,7 @@ from pyro.contrib.autoguide import mean_field_entropy
 class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
     def __init__(self, hparams):
         super(DoseResponseExperimentalDesignModel, self).__init__()
-        self.hparams = self.__initialize_hparams(hparams)
+        self.hparams = self.initialize_hparams(hparams)
 
         self.design_prototype = torch.zeros(
             self.hparams.num_parallel,
@@ -84,13 +85,18 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
         parser.add_argument('--device', default='cuda:0', type=str)
         return parser
 
-    def __initialize_hparams(self, hparams):
+    def initialize_hparams(self, hparams):
         assert hparams.design_size > 0
 
         assert len(hparams.design_range) == 2
         assert hparams.design_range[0] < hparams.design_range[1]
 
         return hparams
+
+    def check_design(self, design):
+        assert all(self.hparams.design_range[0] <= design)
+        assert all(design <= self.hparams.design_range[1])
+        assert all(design.shape == self.design_prototype.shape)
 
     # ---------------------
     # MODEL SETUP
@@ -104,8 +110,11 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
     def prior_entropy(self):
         return mean_field_entropy(
             self.model,
-            [torch.zeros(self.hparams.num_parallel, self.design_size, device=self.hparams.device)],
-            whitelist=self.target_labels)
+            [torch.zeros(
+                self.hparams.num_parallel,
+                self.hparams.design_size,
+                device=self.hparams.device)],
+            whitelist=self.hparams.target_labels)
     
     def __build_loss(self):
         if self.hparams.estimator == 'posterior':
@@ -162,14 +171,14 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
     def __build_eig_upper(self):
         if self.hparams.estimator == 'posterior':
             upper_loss = lambda d, N, **kwargs: vnmc_eig(
-                self.model,
-                d,
-                [self.hparams.observation_label],
-                self.hparams.target_labels,
-                (N, int(math.sqrt(N))),
-                0,
-                self.guide,
-                None)
+                model=self.model,
+                design=d,
+                observation_labels=[self.hparams.observation_label],
+                target_labels=self.hparams.target_labels,
+                num_samples=(N, int(math.sqrt(N))),
+                num_steps=0,
+                guide=self.guide,
+                optim=None)
         elif self.hparams.estimator == 'nce':
             upper_loss = lambda d, N, **kwargs: nmc_eig(
                 model=self.model,
@@ -181,14 +190,14 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
                 **kwargs)
         elif self.hparams.estimator == 'ace':
             upper_loss = lambda d, N, **kwargs: vnmc_eig(
-                self.model,
-                d,
-                [self.hparams.observation_label],
-                self.hparams.target_labels,
-                (N, int(math.sqrt(N))),
-                0,
-                self.guide,
-                None)
+                model=self.model,
+                design=d,
+                oservation_labels=[self.hparams.observation_label],
+                target_labels=self.hparams.target_labels,
+                num_samples=(N, int(math.sqrt(N))),
+                num_steps=0,
+                guide=self.guide,
+                optim=None)
         else:
             raise ValueError("Unexpected estimator")
         return upper_loss
@@ -205,6 +214,7 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
             site["value"].unconstrained()
             for site in param_capture.trace.nodes.values())
         if torch.isnan(agg_loss):
+            import pdb; pdb.set_trace()
             raise ArithmeticError("Encountered NaN loss in opt_eig_ape_loss")
 
         # monkey patch agg_loss to retain graph on the backwards pass
@@ -248,6 +258,7 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
         pdb.set_trace()
 
     def optimizer_step(self, epoch_nb, batch_nb, optimizer, optimizer_i, second_order_closure=None):
+        optimizer(self.params)
         optimizer.step()
         pyro.infer.util.zero_grads(self.params)
 
@@ -257,25 +268,38 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
         if isinstance(lower, tuple): lower = lower[1]
         if isinstance(upper, tuple): upper = upper[1]
 
-        a_design = pyro.param('design')[0,].detach().clone().cpu().data.numpy()
+        a_design = pyro.param('design').squeeze().detach().clone().cpu().data.numpy()
         a_design.sort()
+        print(a_design)
         self.logger.experiment.add_histogram(
             tag='design',
             values=a_design,
-            global_step=batch_nb)
+            global_step=self.global_step)
+        
+        print(f"lower {self.global_step}: {np.array(lower).mean()}")
+        self.logger.experiment.add_scalar(
+            tag='eig_lower',
+            scalar_value=np.array(lower).mean(),
+            global_step=self.global_step)
+
+        print(f"upper {self.global_step}: {np.array(upper).mean()}")
+        self.logger.experiment.add_scalar(
+            tag='eig_upper',
+            scalar_value=np.array(upper).mean(),
+            global_step=self.global_step)
 
         tqdm_dict = {
-            'eig_lower': lower,
-            'eig_upper': upper,
+            'eig_lower': lower.mean(),
+            'eig_upper': upper.mean(),
             'wall_time': time.time() - self.t}
         outputs = {
             'progress_bar': tqdm_dict,
             'log': tqdm_dict}
         return outputs
 
-        def validation_end(self, outputs):
-            return outputs
-
+    def validation_epoch_end(self, outputs):
+        return outputs[0]
+    
 
     # ---------------------
     # TRAINING SETUP
@@ -283,6 +307,7 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
     def configure_optimizers(self):
         # note both pyro and lightning can manage schedules
         # for now we're going to use Pyro's
+        
 
         # shim for pyro.optim.PyroOptim and nn.Module interface save state interface
         # implement only state_dict() support for now

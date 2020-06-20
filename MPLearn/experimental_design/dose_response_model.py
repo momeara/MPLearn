@@ -75,13 +75,22 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
         parser.add_argument('--estimator', default='posterior', type=str)
 
         # training params (opt)
-        parser.add_argument('--optimizer_name', default='adam', type=str)
         parser.add_argument('--num_samples', default=10, type=int)
-        parser.add_argument('--num_steps', default=1000, type=int)
+        parser.add_argument('--num_steps', default=100, type=int)
         parser.add_argument('--check_bounds_frequency', default=1000, type=int)
         parser.add_argument('--m_final', default=20, type=int)
-        parser.add_argument('--start_lr', default=0.01, type=float)
-        parser.add_argument('--end_lr', default=0.01, type=float)
+
+        parser.add_argument('--optimizer_name', default='exponential', type=str)
+
+        # optimizer_name == 'exponential' -> pyro.optim.ExponentialLR
+        parser.add_argument('--exponential_lr_start', default=0.01, type=float)
+        parser.add_argument('--exponential_lr_end', default=0.01, type=float)
+
+        # optimizer_name == 'cosine' -> pyro.optim.CosineAnnealingLR
+        parser.add_argument('--cosine_lr_T_max', default = 10, type=float)
+        parser.add_argument('--cosine_lr_eta_min', default=0, type=float)
+        parser.add_argument('--cosine_lr_last_epoch', default=-1, type=int) 
+        
         parser.add_argument('--device', default='cuda:0', type=str)
         return parser
 
@@ -115,7 +124,7 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
                 self.hparams.design_size,
                 device=self.hparams.device)],
             whitelist=self.hparams.target_labels)
-    
+
     def __build_loss(self):
         if self.hparams.estimator == 'posterior':
             loss = _differentiable_posterior_loss(
@@ -261,6 +270,17 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
         optimizer(self.params)
         optimizer.step()
         pyro.infer.util.zero_grads(self.params)
+        if batch_nb == 0:
+            for i, scheduler in enumerate(optimizer.optim_objs.values()):
+                learning_rate = scheduler.get_last_lr()
+                if learning_rate is None:
+                    print(f"  not logging because last learning rate is None")
+                    continue
+                print(f"  learning_rate_{i}: {learning_rate[0]}")
+                self.logger.experiment.add_scalar(
+                    tag=f"learning_rate_{i}",
+                    scalar_value=learning_rate[0],
+                    global_step=self.global_step)
 
     def validation_step(self, batch, batch_nb):
         lower = self.eig_lower(self.design_prototype, self.hparams.m_final**2, evaluation=True)
@@ -307,7 +327,6 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
     def configure_optimizers(self):
         # note both pyro and lightning can manage schedules
         # for now we're going to use Pyro's
-        
 
         # shim for pyro.optim.PyroOptim and nn.Module interface save state interface
         # implement only state_dict() support for now
@@ -318,11 +337,30 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
             return self.get_state()
         pyro.optim.PyroLRScheduler.state_dict = state_dict
 
-        optimizer = pyro.optim.ExponentialLR({
-            'optimizer': torch.optim.Adam,
-            'optim_args': {'lr': self.hparams.start_lr},
-            'gamma': (self.hparams.end_lr / self.hparams.start_lr) ** (1 / self.hparams.num_steps)
-        })
+        if self.hparams.optimizer_name == 'one_cycle':
+            optimizer = pyro.optim.OneCycleLR({
+                'optimizer': torch.optim.Adam,
+                'optim_args' : {'lr': self.hparams.exponential_lr_start},
+                'max_lr' : .1,
+                'total_steps' : 20})
+        
+        if self.hparams.optimizer_name == "cosine":
+            optimizer = pyro.optim.CosineAnnealingLR({
+                'optimizer': torch.optim.Adam,
+                'optim_args' : {'lr': self.hparams.exponential_lr_start},
+                'T_max' : self.hparams.cosine_lr_T_max,
+                'eta_min' : self.hparams.cosine_lr_eta_min,
+                'last_epoch' : self.hparams.cosine_lr_last_epoch})
+        
+        if self.hparams.optimizer_name == "exponential":
+            optimizer = pyro.optim.ExponentialLR({
+                'optimizer': torch.optim.Adam,
+                'optim_args': {'lr': self.hparams.exponential_lr_start},
+                'gamma': (
+                    self.hparams.exponential_lr_end / \
+                    self.hparams.exponential_lr_start) ** (1 / self.hparams.num_steps)
+            })
+
         return [optimizer], []
 
     @pytorch_lightning.data_loader

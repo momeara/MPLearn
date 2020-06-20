@@ -53,6 +53,9 @@ install_ml_support:
 	pip install ipywidgets
 	jupyter nbextension enable --py widgetsnbextension
 
+install_chemoinformatic_support:
+	conda install -c conda-forge rdkit
+
 
 run_Steatosis2020_vignette:
 	# generate umap embeddings and density based clusterings

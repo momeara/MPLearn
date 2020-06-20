@@ -1,0 +1,86 @@
+#!/usr/bin/env python
+# -*- tab-width:4;indent-tabs-mode:nil;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
+# vi: set ts=2 noet:
+
+import sys
+import argparse
+
+import pandas as pd
+from MPLearn.chemoinformatics import similarity_search
+
+DESCRIPTION = """Screen a set of query molecules against a library for chemical similarity
+version 0.0.1
+
+Example:
+    cd MPLearn/vignettes/candida_albicans_filamentation
+    python library_search \
+        --query_path query.smi \
+        --library_path library.sdf \
+        --output_path results.tsv
+
+"""
+
+def main(argv):
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument(
+        "--query_path", type=str, action="store", dest="query_path",
+        help="""Path to a .tsv file of query compounds with columns [<id>, <smiles>] (Required)""")
+    parser.add_argument(
+        "--library_path", type=str, action="store", dest="library_path",
+        help="""Path to an .sdf file of reference library compounds (Required)""")
+    parser.add_argument(
+        "--output_path", type=str, action="store", dest="output_path", default="results.tsv",
+        help="""Path to output .tsv file with results with columns [query_id, <library_fields>, tanimoto_similarity (Default: 'result.tsv')""")
+    parser.add_argument(
+        "--query_id_field", type=str, action="store", dest="query_id_field", default="id",
+        help="""Field in the query file having the query identifier (Default: id)""")
+    parser.add_argument(
+        "--query_smiles_field", type=str, action="store", dest="query_smiles_field", default="smiles",
+        help="""Field in the query file having the query smiles (Default: smiles)""")
+    parser.add_argument(
+        "--library_fields", nargs="+", type=str, action="store", dest="library_fields", default=None,
+	    help="""Fields from the library that are stored in the results file (Default: all)""")
+    parser.add_argument(
+	    "--fingerprint_type", type=str, action="store", dest="fingerprint_type", default="ECFP4",
+        help="""Fingerprint type for the query and library compounds over which to compute the tanimoto similarity""")
+    parser.add_argument(
+        "--similarity_threshold", type=float, action="store", dest="similarity_threshold", default=0.6,
+        help="""query vs. library compound similarities at or above the threshold are collected into the result set. (Default 0.6)""")
+    parser.add_argument(
+        "--verbose", action="store_true", dest="verbose",
+        help="""Give verbose output (Default: False)""")
+
+    arguments = parser.parse_args()
+
+    ##############
+    # Load query #
+    ##############
+    query_data = pd.read_csv(arguments.query_path, sep="\t", header=0)
+
+    if arguments.query_id_field not in query_data.columns:
+        raise ValueError(f"query file does not have id field '{arguments.query_id_field}', available options are [{', '.join(query_data.columns)}].")
+
+    if arguments.query_smiles_field not in query_data.columns:
+        raise ValueError(f"query file does not have smiles field '{arguments.query_id_field}', available options are [{', '.join(query_data.columns)}].")
+
+    #########################
+    # Run similarity search #
+    #########################
+    results = similarity_search.library_search(
+        query=query_data[arguments.query_smiles_field],
+        query_ids=query_data[arguments.query_id_field],
+        library_path=arguments.library_path,
+        library_fields=arguments.library_fields,
+        fingerprint_type=arguments.fingerprint_type,
+        similarity_threshold=arguments.similarity_threshold,
+        verbose=arguments.verbose)
+    results = pd.DataFrame(results)
+
+    ################
+    # Save results #
+    ################
+    results.to_csv(arguments.output_path, sep="\t")
+
+
+if __name__ == "__main__":
+    main(sys.argv)

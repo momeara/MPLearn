@@ -1,4 +1,3 @@
-
 import os
 import logging
 from typing import Sequence
@@ -44,7 +43,7 @@ def library_search(
     if similarity_threshold < 0 or 1 < similarity_threshold:
         raise ValueError((
             f"Similarity threshold {similarity_threshold} is not in the range [0, 1]"))
-    
+
     query_fingerprints = []
     validated_query_ids = []
     for query_index, query_smiles in enumerate(query):
@@ -103,37 +102,5 @@ def library_search(
 
     if verbose:
         print(f"Found {len(results)} similar hits.")
-        
+
     return results
-                        
-
-
-
-
-def compute_fingerprints(input_sdf, id_property="Client_ID", save_fname=None):
-    """ Given an sdf file of compounds, compute ECFP4 fingerprints
-
-        inputs:
-           input_sdf: path to .sdf file
-           id_property: field containing the identifier for the compound
-           save_fname: if given, cache the fp_matrix to disk using numpy's .save() function
-        output:
-           fp_matrix: numpy array of type bool having shape (<num_molecules>, 2048)
-           substance_ids: list of strings with id_property value for each substance
-    """
-    fps = []
-    substance_ids = []
-    for index, substance in enumerate(rdkit.Chem.SDMolSupplier(input_sdf)):
-        if not index % 10000:
-            print("On index {}".format(index))
-        if substance is None:
-            print("Skipping substance {}".format(index))
-            continue
-        substance_id = substance.GetProp(id_property)
-        fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol=substance, radius=2)
-        fps.append(fp)
-        substance_ids.append(substance_id)
-    fp_matrix = np.array(fps)
-    if save_fname is not None:
-        np.save(file=save_fname, arr=fp_matrix)
-    return fp_matrix, substance_ids

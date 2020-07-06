@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+# -*- tab-width:4;indent-tabs-mode:nil;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
+# vi: set ts=2 noet:
+
+import sys
+import argparse
+import math
+import textwrap
+import numpy as np
+import pandas as pd
+import matplotlib
+import matplotlib.pyplot
+import matplotlib.gridspec
+import MPLearn.chemoinformatics.visualize
+
+
+DESCRIPTION = """ Draw a set of molecules where they are aligned to a reference molecule or their maximum common substructure
+version 0.0.1
+
+Example:
+    cd MPLearn/vignettes/candida_albicans_filamentation
+    python draw_aligned_substances \
+        --substances_path substances.smi
+
+"""
+
+def main(argv):
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument(
+        "--substances_path", type=str, action="store", dest="substances_path",
+        help="""Path to a .tsv file of substances having columns [<id>, <smiles>] (Required)""")
+    parser.add_argument(
+        "--substances_id_field", type=str, action="store", dest="substances_id_field", default="id",
+        help="""Field in the substances file having the substances identifier (Default: id)""")
+    parser.add_argument(
+        "--substances_smiles_field", type=str, action="store", dest="substances_smiles_field", default="smiles",
+        help="""Field in the substances file having the substances smiles (Default: smiles)""")
+    parser.add_argument(
+        "--template_smiles", type=str, action="store", dest="template_smiles",
+        help="""Template to align substances to. If not given align to maximum common substructure (Default: None)""")
+    parser.add_argument(
+        "--output_path", type=str, action="store", dest="output_path",
+        help="""Output path for generated image.""")
+    parser.add_argument(
+        "--output_width", type=float, action="store", dest="output_width", default=8.0,
+        help="""Width of output image (Default: 8.0)""")
+    parser.add_argument(
+        "--output_height", type=float, action="store", dest="output_height", default=8.0,
+        help="""Height of output image (Default: 8.0)""")
+    parser.add_argument(
+        "--n_columns", type=int, action="store", dest="output_n_columns", default=None,
+        help="""Number of columns if None, then use ceil(sqrt(len(<substances>))) (Default: None)""")
+    parser.add_argument(
+        "--output_dpi", type=int, action="store", dest="output_dpi", default=1200,
+        help="""Resolution of the output image (Default: 1200)""")
+    parser.add_argument(
+        "--verbose", action="store_true", dest="verbose",
+        help="""Give verbose output (Default: False)""")
+
+    arguments = parser.parse_args()
+
+    ##############
+    # Load query #
+    ##############
+    substance_data = pd.read_csv(arguments.substances_path, sep="\t", header=0)
+
+    if arguments.substances_id_field not in substance_data.columns:
+        raise ValueError(f"substance file does not have id field '{arguments.substances_id_field}', available options are [{', '.join(substance_data.columns)}].")
+
+    if arguments.substances_smiles_field not in substance_data.columns:
+        raise ValueError(f"substance file does not have smiles field '{arguments.substances_smiles_field}', available options are [{', '.join(substance_data.columns)}].")
+
+    ###########################
+    # generate aligned images #
+    ###########################
+    depictions = MPLearn.chemoinformatics.visualize.draw_aligned_substances(
+        substance_smiles=substance_data[arguments.substances_smiles_field].to_list(),
+        substance_ids=substance_data[arguments.substances_id_field].to_list(),
+        verbose=arguments.verbose)
+
+    if arguments.output_n_columns is None:
+        n_columns = math.ceil(math.sqrt(len(depictions)))
+    else:
+        n_columns = arguments.output_n_columns
+
+    n_rows = math.ceil(len(depictions)/n_columns)
+
+    figure, axes = matplotlib.pyplot.subplots(
+        ncols=n_columns,
+        nrows=n_rows,
+        dpi=arguments.output_dpi)
+    for depiction_index in range(n_rows*n_columns):
+        row = math.floor(depiction_index/n_columns)
+        column = depiction_index % n_columns
+        axis = axes[row, column]
+        axis.get_xaxis().set_visible(False)
+        axis.get_yaxis().set_visible(False)
+        axis.patch.set_visible(False)
+        axis.spines['top'].set_visible(False)
+        axis.spines['right'].set_visible(False)
+        axis.spines['bottom'].set_visible(False)
+        axis.spines['left'].set_visible(False)
+
+        if depiction_index < len(depictions):
+            depiction = depictions[depiction_index]
+            axis.imshow(depiction, interpolation='bessel')
+            title = substance_data[arguments.substances_id_field][depiction_index]
+            title = "\n".join(textwrap.wrap(title, 15))
+            axis.set_title(
+                title,
+                fontsize=4,
+                wrap=True,
+                pad=0)
+
+    matplotlib.pyplot.axis('off')
+    matplotlib.pyplot.savefig(arguments.output_path, bbox_inches='tight')
+
+if __name__ == "__main__":
+    main(sys.argv)
+
+
+

@@ -43,3 +43,6 @@ Rplots.pdf
 vignettes/*/*/product/*
 vignettes/*/*/intermediate_data/*
 vignettes/*/*/input/*
+vignettes/*/product/*
+vignettes/*/intermediate_data/*
+vignettes/*/input/*

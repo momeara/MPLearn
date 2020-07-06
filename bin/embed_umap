@@ -70,6 +70,9 @@ def main(argv):
         "--pca_n_components", type=int, action="store", dest="pca_n_components", default=None,
         help="""Dimension of the preliminary PCA embedding (Default: PCA with no-dimensionality reduction)""")
     parser.add_argument(
+        "--pca_batch_size", type=int, action="store", dest="pca_batch_size", default=1000,
+        help="""Batch size of streaming PCA embedding (Default: 1000)""")
+    parser.add_argument(
         "--umap_n_components", type=int, action="store", dest="umap_n_components", default=2,
         help="""Dimension of the resulting UMAP embedding (Default: 2)""")
     parser.add_argument(
@@ -110,6 +113,9 @@ def main(argv):
         if arguments.pca_n_components is not None:
             print("ERROR: setting '--pca_n_components' is incompatible with setting '--ref_embed_dir'")
             exit(1)
+        if arguments.pca_batch_size != parser.get_default('pca_batch_size'):
+            print("ERROR: setting '--pca_batch_size' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
         if arguments.umap_n_components != parser.get_default('umap_n_components'):
             print("ERROR: setting '--umap_n_components' is incompatible with setting '--ref_embed_dir'")
             exit(1)
@@ -149,10 +155,15 @@ def main(argv):
     for dataset_path in arguments.dataset:
         if arguments.verbose:
             print("Reading in dataset '{}'...".format(dataset_path))
-        dataset.append(pa.parquet.read_table(
-            source=dataset_path,
-            columns=feature_columns['feature'],
-        ).to_pandas().astype('float32'))
+        if arguments.feature_columns is not None:
+            dataset.append(pa.parquet.read_table(
+                source=dataset_path,
+                columns=feature_columns['feature'],
+            ).to_pandas().astype('float32'))
+        else:
+            dataset.append(pa.parquet.read_table(
+                source=dataset_path,
+            ).to_pandas().astype('float32'))
     dataset = pd.concat(dataset, axis=0)
     if arguments.feature_columns is not None:
         if arguments.verbose:
@@ -167,7 +178,7 @@ def main(argv):
             elif transform == 'log1p':
                 dataset[feature] = np.log1p(dataset[feature])
             else:
-                raise Exception("Unrecognized tranform '{}' for feature column '{}' in passed argument --feature_columns '{}'".format(transform, feature, argumnets.feature_columns))
+                raise Exception("Unrecognized tranform '{}' for feature column '{}' in passed argument --feature_columns '{}'".format(transform, feature, arguments.feature_columns))
 
     if arguments.random_subset is not None and arguments.random_subset < dataset.shape[0]:
         if arguments.verbose:
@@ -220,6 +231,7 @@ def main(argv):
             embed_dir=embed_dir,
             standardize_features=arguments.standardize_features is None or arguments.standardize_features,
             pca_n_components=arguments.pca_n_components,
+            pca_batch_size=arguments.pca_batch_size,
             umap_n_components=arguments.umap_n_components,
             umap_init=arguments.umap_init,
             umap_n_neighbors=arguments.umap_n_neighbors,

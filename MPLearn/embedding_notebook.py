@@ -48,6 +48,7 @@ def load_single_embedding(
         embedding_tag,
         cluster_embedding_tag=None,
         plate_id=None,
+        meta_path=None,
         meta_columns=['Compound', 'dose_nM']):
     """load cell embedding from an embed_umap run
 
@@ -80,15 +81,23 @@ def load_single_embedding(
             f"ERROR: Experiment path '{experiment_path}' does not exist.\n",
             f"ERROR: Current working directory is '{os.getcwd()}'")
 
-    cell_meta_path = f"{experiment_path}/raw_data/{plate_id}_Cell_MasterDataTable.parquet"
-    if not os.path.exists(cell_meta_path):
-        raise Exception(
-            f"ERROR: Unable to cell meta data at path '{cell_meta_path}'")
+    if meta_columns is not None:
+        if meta_path is None:
+            meta_path = f"{experiment_path}/raw_data/{plate_id}_Cell_MasterDataTable.parquet"
+        if not os.path.exists(meta_path):
+            raise Exception(
+                f"ERROR: Unable to cell meta data at path '{meta_path}'")
 
-    cell_meta = pa.parquet.read_table(
-        source="{}/raw_data/{}_Cell_MasterDataTable.parquet".format(experiment_path, plate_id),
-        columns=meta_columns).to_pandas()
-
+        if meta_path.endswith(".parquet"):
+            cell_meta = pa.parquet.read_table(
+                source="{}/raw_data/{}_Cell_MasterDataTable.parquet".format(experiment_path, plate_id),
+                columns=meta_columns).to_pandas()
+        elif meta_path.endswith(".tsv.gz"):
+            cell_meta = pd.read_csv(meta_path, sep="\t")
+            cell_meta = cell_meta[meta_columns]
+        else:
+            raise Exception(
+                f"ERROR: Unrecognized extension of metadata file {meta_path}")
 
     embed_dir = "{}/intermediate_data/{}".format(experiment_path, embedding_tag)
     if not os.path.exists(embed_dir):
@@ -100,13 +109,15 @@ def load_single_embedding(
     if os.path.exists('{}/sample_indices.tsv'.format(embed_dir)):
         sample_indices = pd.read_csv(
             '{}/sample_indices.tsv'.format(embed_dir), header=None).loc[:, 0]
-        cell_meta = cell_meta.iloc[sample_indices].reset_index()
+        if meta_columns is not None:
+            cell_meta = cell_meta.iloc[sample_indices].reset_index()
 
     embedding = pa.parquet.read_table(
         source="{}/umap_embedding.parquet".format(embed_dir)).to_pandas()
 
     if cluster_embedding_tag is False:
-        embedding = pd.concat([cell_meta, embedding], axis=1)
+        if meta_columns is not None:
+            embedding = pd.concat([cell_meta, embedding], axis=1)
     else:
         if cluster_embedding_tag is not None:
             cluster_embed_dir = "{}/intermediate_data/{}".format(
@@ -116,8 +127,10 @@ def load_single_embedding(
         cluster_labels = pa.parquet.read_table(
             "{}/hdbscan_clustering_min100.parquet".format(cluster_embed_dir)).to_pandas()
         cluster_labels['cluster_label'] = cluster_labels['cluster_label'].astype(int)
-        embedding = pd.concat([cell_meta, embedding, cluster_labels], axis=1)
-
+        if meta_columns is not None:
+            embedding = pd.concat([cell_meta, embedding, cluster_labels], axis=1)
+        else:
+            embedding = pd.concat([embedding, cluster_labels], axis=1)
     return embedding
 
 

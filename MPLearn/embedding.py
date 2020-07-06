@@ -22,6 +22,7 @@ def fit_embedding(
         embed_dir,
         standardize_features=True,
         pca_n_components=None,
+        pca_batch_size=1000,
         umap_n_components=2,
         umap_init='random',
         umap_n_neighbors=100,
@@ -68,7 +69,7 @@ def fit_embedding(
         print("Reducing the dimension by PCA from {} to {} dimensions".format(dataset.shape[1], pca_n_components))
     pca_reducer = IncrementalPCA(
         n_components=pca_n_components,
-        batch_size=1000,
+        batch_size=pca_batch_size,
         copy=False)
     pca_reducer.fit(dataset)
     pca_embedding = pca_reducer.transform(dataset)

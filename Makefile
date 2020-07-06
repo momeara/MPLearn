@@ -8,6 +8,7 @@ install_prereqs:
 	conda install -c conda-forge holoviews
 	conda install -c conda-forge pyviz panel
 	conda install -c conda-forge pyarrow
+	conda install -c conda-forge h5py
 	conda install -c conda-forge boto3
 	conda install -c conda-forge mysql-connector-python
 	conda install -c bokeh selenium
@@ -52,9 +53,15 @@ install_ml_support:
 	pip install test_tube
 	pip install ipywidgets
 	jupyter nbextension enable --py widgetsnbextension
+	pip install git+https://github.com/AllenCellModeling/pytorch_fnet
+
 
 install_chemoinformatic_support:
 	conda install -c conda-forge rdkit
+
+install_acas_support:
+	sudo apt-get install libpq-dev
+
 
 
 run_Steatosis2020_vignette:

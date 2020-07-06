@@ -61,7 +61,7 @@ def main(argv):
         raise ValueError(f"query file does not have id field '{arguments.query_id_field}', available options are [{', '.join(query_data.columns)}].")
 
     if arguments.query_smiles_field not in query_data.columns:
-        raise ValueError(f"query file does not have smiles field '{arguments.query_id_field}', available options are [{', '.join(query_data.columns)}].")
+        raise ValueError(f"query file does not have smiles field '{arguments.query_smiles_field}', available options are [{', '.join(query_data.columns)}].")
 
     #########################
     # Run similarity search #

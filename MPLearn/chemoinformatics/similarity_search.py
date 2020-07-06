@@ -1,3 +1,6 @@
+# -*- tab-width:4;indent-tabs-mode:nil;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
+# vi: set ts=2 noet:
+
 import os
 import logging
 from typing import Sequence

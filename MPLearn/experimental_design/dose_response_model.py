@@ -33,8 +33,6 @@ from pyro.util import is_bad
 from pyro.contrib.autoguide import mean_field_entropy
 
 
-
-
 class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
     def __init__(self, hparams):
         super(DoseResponseExperimentalDesignModel, self).__init__()
@@ -89,8 +87,8 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
         # optimizer_name == 'cosine' -> pyro.optim.CosineAnnealingLR
         parser.add_argument('--cosine_lr_T_max', default = 10, type=float)
         parser.add_argument('--cosine_lr_eta_min', default=0, type=float)
-        parser.add_argument('--cosine_lr_last_epoch', default=-1, type=int) 
-        
+        parser.add_argument('--cosine_lr_last_epoch', default=-1, type=int)
+
         parser.add_argument('--device', default='cuda:0', type=str)
         return parser
 
@@ -172,7 +170,7 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
                 self.guide,
                 self.hparams.m_final,
                 [self.hparams.observation_label],
-                self.hparams.starget_labels)
+                self.hparams.target_labels)
         else:
             raise ValueError("Unexpected estimator")
         return high_acc
@@ -266,27 +264,38 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
         import pdb
         pdb.set_trace()
 
-    def optimizer_step(self, epoch_nb, batch_nb, optimizer, optimizer_i, second_order_closure=None):
+    def optimizer_step(
+            self,
+            epoch,
+            batch_idx,
+            optimizer,
+            optimizer_idx,
+            second_order_closure=None,
+            on_tpu=False,
+            using_native_amp=False,
+            using_lbgfs=False):
         optimizer(self.params)
         optimizer.step()
         pyro.infer.util.zero_grads(self.params)
-        if batch_nb == 0:
+        if batch_idx == 0:
             for i, scheduler in enumerate(optimizer.optim_objs.values()):
                 learning_rate = scheduler.get_last_lr()
                 if learning_rate is None:
                     print(f"  not logging because last learning rate is None")
                     continue
-                print(f"  learning_rate_{i}: {learning_rate[0]}")
                 self.logger.experiment.add_scalar(
                     tag=f"learning_rate_{i}",
                     scalar_value=learning_rate[0],
                     global_step=self.global_step)
 
-    def validation_step(self, batch, batch_nb):
+    def validation_step(self, batch, batch_idx):
+        print("Validation step")
         lower = self.eig_lower(self.design_prototype, self.hparams.m_final**2, evaluation=True)
         upper = self.eig_upper(self.design_prototype, self.hparams.m_final**2, evaluation=True)
         if isinstance(lower, tuple): lower = lower[1]
         if isinstance(upper, tuple): upper = upper[1]
+        lower_mean = lower.mean().cpu()
+        upper_mean = upper.mean().cpu()
 
         a_design = pyro.param('design').squeeze().detach().clone().cpu().data.numpy()
         a_design.sort()
@@ -295,31 +304,32 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
             tag='design',
             values=a_design,
             global_step=self.global_step)
-        
-        print(f"lower {self.global_step}: {np.array(lower).mean()}")
+
+        print(f"lower {self.global_step}: {lower_mean}")
         self.logger.experiment.add_scalar(
             tag='eig_lower',
-            scalar_value=np.array(lower).mean(),
+            scalar_value=lower_mean,
             global_step=self.global_step)
 
-        print(f"upper {self.global_step}: {np.array(upper).mean()}")
+        print(f"upper {self.global_step}: {upper_mean}")
         self.logger.experiment.add_scalar(
             tag='eig_upper',
-            scalar_value=np.array(upper).mean(),
+            scalar_value=upper_mean,
             global_step=self.global_step)
 
         tqdm_dict = {
-            'eig_lower': lower.mean(),
-            'eig_upper': upper.mean(),
+            'eig_lower': lower_mean,
+            'eig_upper': upper_mean,
             'wall_time': time.time() - self.t}
         outputs = {
             'progress_bar': tqdm_dict,
             'log': tqdm_dict}
+        print("done validation step")
         return outputs
 
     def validation_epoch_end(self, outputs):
         return outputs[0]
-    
+
 
     # ---------------------
     # TRAINING SETUP
@@ -343,7 +353,7 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
                 'optim_args' : {'lr': self.hparams.exponential_lr_start},
                 'max_lr' : .1,
                 'total_steps' : 20})
-        
+
         if self.hparams.optimizer_name == "cosine":
             optimizer = pyro.optim.CosineAnnealingLR({
                 'optimizer': torch.optim.Adam,
@@ -351,7 +361,7 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
                 'T_max' : self.hparams.cosine_lr_T_max,
                 'eta_min' : self.hparams.cosine_lr_eta_min,
                 'last_epoch' : self.hparams.cosine_lr_last_epoch})
-        
+
         if self.hparams.optimizer_name == "exponential":
             optimizer = pyro.optim.ExponentialLR({
                 'optimizer': torch.optim.Adam,
@@ -362,6 +372,16 @@ class DoseResponseExperimentalDesignModel(pytorch_lightning.LightningModule):
             })
 
         return [optimizer], []
+
+    def optimizer_zero_grad(
+            self,
+            epoch,
+            batch_idx,
+            optimizer,
+            optimizer_idx):
+        if optimizer is not None and optimizer.optim_objs is not None:
+            for optim_obj in optimizer.optim_objs.items():
+                optim_obj[1].optimizer.zero_grad()
 
     @pytorch_lightning.data_loader
     def train_dataloader(self):

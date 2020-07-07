@@ -1,19 +1,27 @@
 
 install_prereqs:
+	# data tools
 	conda install setuptools pandas joblib scikit-learn nodejs
-	conda install -c conda-forge umap-learn
-	conda install -c conda-forge hdbscan
-	conda install -c conda-forge jupyterlab
-	conda install -c conda-forge datashader
-	conda install -c conda-forge holoviews
-	conda install -c conda-forge pyviz panel
+
+	# data io
 	conda install -c conda-forge pyarrow
 	conda install -c conda-forge h5py
 	conda install -c conda-forge boto3
 	conda install -c conda-forge mysql-connector-python
+
+	# embedding
+	conda install -c conda-forge umap-learn
+	conda install -c conda-forge hdbscan
+	conda install -c conda-forge leidenalg
+
+	# notebook support
+	conda install -c conda-forge holoviews
+	conda install -c conda-forge pyviz panel
+	conda install -c conda-forge jupyterlab
+	conda install -c conda-forge datashader
+	conda install -c conda-forge shapely
 	conda install -c bokeh selenium
 	conda install phantomjs
-
 	# make jupyter lab work with holoviews
 	jupyter labextension install jupyterlab_bokeh
 	jupyter labextension install @pyviz/jupyterlab_pyviz
@@ -29,8 +37,6 @@ install_extras:
 	# conda install -c bioconda fails because with wrong version of python error:
 	# stream -> python[version='>=3.5,<3.6.0a0|>=3.6,<3.7.0a0|>=3.7,<3.8.0a0']
 	conda install rpy2
-	conda install -c conda-forge leidenalg
-	conda install -c conda-forge shapely
 	conda install -c conda-forge seaborn
 	conda install -c conda-forge statsmodels
 	conda install -c conda-forge anndata

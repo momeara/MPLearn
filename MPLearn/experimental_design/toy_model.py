@@ -52,7 +52,7 @@ class PosteriorGuide(nn.Module):
 
         knot1_mu = final[..., 2]
         knot1_sd = self.softplus(final[..., 3])
-        
+
         pyro.module("posterior_guide", self)
 
         batch_shape = design_prototype.shape[:-1]
@@ -82,7 +82,7 @@ class ToyModel(dose_response_model.DoseResponseExperimentalDesignModel):
         parser.add_argument('--target_labels', default=["knot0", "knot1"], nargs=2)
         return parser
 
-    
+
     def model(self, design_prototype):
         """
             :param torch.tensor design

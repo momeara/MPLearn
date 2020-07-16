@@ -261,7 +261,7 @@ def main(argv):
                 where="intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hdbscan_min_cluster_size))
 
 
-    if arguments.random_subset is not None:
+    if arguments.random_subset is not None and arguments.random_subset < dataset.shape[0]:
         with open("{}/sample_indices.tsv".format(embed_dir), 'w') as f:
             f.write("\n".join(map(str, sample_indices)))
 

@@ -65,8 +65,8 @@ def run_hill_model():
     model = hill_model.HillModel(hparams)
 
     trainer = pytorch_lightning.Trainer(
-        nb_sanity_val_steps=0,
-        max_nb_epochs=2000,
+        num_sanity_val_steps=0,
+        max_epochs=2000,
         logger=logger,
         track_grad_norm=2)
     trainer.fit(model)

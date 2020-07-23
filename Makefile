@@ -1,23 +1,31 @@
 
 install_prereqs:
+	# data tools
 	conda install setuptools pandas joblib scikit-learn nodejs
-	conda install -c conda-forge umap-learn
-	conda install -c conda-forge hdbscan
-	conda install -c conda-forge jupyterlab
-	conda install -c conda-forge datashader
-	conda install -c conda-forge holoviews
-	conda install -c conda-forge pyviz panel
+
+	# data io
 	conda install -c conda-forge pyarrow
 	conda install -c conda-forge h5py
 	conda install -c conda-forge boto3
 	conda install -c conda-forge mysql-connector-python
+
+	# embedding
+	conda install -c conda-forge umap-learn
+	conda install -c conda-forge hdbscan
+	conda install -c conda-forge leidenalg
+
+	# notebook support
+	conda install -c conda-forge holoviews
+	conda install -c conda-forge pyviz panel
+	conda install -c conda-forge jupyterlab
+	conda install -c conda-forge datashader
+	conda install -c conda-forge shapely
 	conda install -c bokeh selenium
 	conda install phantomjs
-
 	# make jupyter lab work with holoviews
-        jupyter labextension install jupyterlab_bokeh
-        jupyter labextension install @pyviz/jupyterlab_pyviz
-        echo "c = get_config()" >> $(jupyter --config_dir)/jupyter_notebook_config.py
+	jupyter labextension install jupyterlab_bokeh
+	jupyter labextension install @pyviz/jupyterlab_pyviz
+	echo "c = get_config()" >> $(jupyter --config_dir)/jupyter_notebook_config.py
 	echo "c.NotebookApp.iopub_data_rate_limit=100000000" >> $(jupyter --config_dir)/jupyter_notebook_config.py
 
 
@@ -27,14 +35,12 @@ install:
 install_extras:
 	# install STREAM
 	# conda install -c bioconda fails because with wrong version of python error:
-        # stream -> python[version='>=3.5,<3.6.0a0|>=3.6,<3.7.0a0|>=3.7,<3.8.0a0']
-        conda install rpy2
-	conda install -c conda-forge leidenalg
-        conda install -c conda-forge shapely
-        conda install -c conda-forge seaborn
-        conda install -c conda-forge statsmodels
-        conda install -c conda-forge anndata
-        pip install git+git://github.com/pinellolab/STREAM.git
+	# stream -> python[version='>=3.5,<3.6.0a0|>=3.6,<3.7.0a0|>=3.7,<3.8.0a0']
+	conda install rpy2
+	conda install -c conda-forge seaborn
+	conda install -c conda-forge statsmodels
+	conda install -c conda-forge anndata
+	pip install git+git://github.com/pinellolab/STREAM.git
 
 	wget https://files.pythonhosted.org/packages/59/9c/972de8fb6246be6557a16565c4cc1977ea9e275540a77ec4a2e0057dc593/tf_nightly-2.2.0.dev20200228-cp38-cp38-manylinux2010_x86_64.whl
 	pip install tf_nightly-2.2.0.dev20200228-cp38-cp38-manylinux2010_x86_64.whl

@@ -5,13 +5,10 @@ import torch
 import pyro
 import pytorch_lightning
 import MPLearn.embedding_notebook
-from MPLearn.experimental_design import hit_rate_model
-from MPLearn.experimental_design import hill_model
 from MPLearn.experimental_design import toy_model
 
 
-root_dir = os.path.dirname(
-    os.path.realpath("~/opt/MPLearn/vignettes/dose_response/intermediate_data"))
+root_dir = os.path.dirname("intermediate_data")
 
 
 def run_toy_model():
@@ -30,16 +27,27 @@ def run_toy_model():
 
     parser = toy_model.ToyModel.add_model_specific_args(
         parent_parser, root_dir)
+
+    if torch.cuda.device_count() > 0:
+        device = "cuda:0"
+    else:
+        device = "cpu:0"
+
     hparams = parser.parse_args(args=[
-        '--device', 'cpu:0',
-        '--start_lr', '.01',
-        '--end_lr', '.01',
+        '--device', device,
+        '--optimizer_name', 'exponential',
+        '--exponential_lr_start', '.001',
+        '--exponential_lr_end', '.001',
+        '--num_samples', '20',
         '--design_size', '51'])
     model = toy_model.ToyModel(hparams)
 
     trainer = pytorch_lightning.Trainer(
-        nb_sanity_val_steps=0,
-        max_nb_epochs=2000,
+        num_sanity_val_steps=0,
+        max_epochs=2000,
+        gpus=torch.cuda.device_count(),
         logger=logger)
+
+    print("Training model...")
     trainer.fit(model)
 run_toy_model()

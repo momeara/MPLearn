@@ -26,7 +26,7 @@ sudo chmod a+r raw_data/Plate\ Maps/NextGenKATinhibitors-V9-SuppData1.xlsx
 
 
 
-for dataset_id in $(tail -n +2 raw_data/dataset_ids_todo.tsv)
+for dataset_id in $(tail -n +2 raw_data/dataset_ids.tsv | cut -d$'\t' -f1) 
 do
     echo "loading dataset '${dataset_id}' ..."
     mkdir raw_data/${dataset_id}

@@ -27,6 +27,8 @@ def fit_embedding(
         umap_init='random',
         umap_n_neighbors=100,
         umap_min_dist=0.0,
+        umap_a=None,
+        umap_b=None,
         umap_metric='euclidean',
         low_memory=False,
         save_transform=True,
@@ -81,6 +83,8 @@ def fit_embedding(
         metric=umap_metric,
         n_neighbors=umap_n_neighbors,
         min_dist=umap_min_dist,
+        a=umap_a,
+        b=umap_b,
         init=umap_init,
         low_memory=low_memory,
         random_state=random_state,
@@ -104,6 +108,8 @@ def fit_embedding(
         f.write("umap_metric\t{}\n".format(umap_metric))
         f.write("umap_n_neighbors\t{}\n".format(umap_n_neighbors))
         f.write("umap_min_dist\t{}\n".format(umap_min_dist))
+        f.write("umap_a\t{}\n".format(umap_reducer._a))
+        f.write("umap_b\t{}\n".format(umap_reducer._b))
         f.write("umap_low_memory\t{}\n".format(low_memory))
         f.write("umap_init\t{}\n".format(umap_init))
 

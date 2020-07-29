@@ -18,17 +18,17 @@ def draw_aligned_substances(
         raise ValueError(f"Input substance_smiles and substance_ids lengths don't match. substance_smiles has length {len(substance_smiles)}, while substance_ids has length {len(substance_ids)}")
 
     rdkit.Chem.rdDepictor.SetPreferCoordGen(True)
-    
+
     substances = []
     for substance_index, smiles in enumerate(substance_smiles):
         try:
-            substance = rdkit.Chem.MolFromSmiles(smiles, sanitize=False)            
+            substance = rdkit.Chem.MolFromSmiles(smiles, sanitize=False)
         except:
             print((
                 f"WARNING: RDKit failed to create substance '{substance_ids[substance_index]}' ",
                 f"with smiles '{smiles}'; skipping..."))
             continue
-            
+
         if substance is None:
             print((
                 f"WARNING: RDKit failed to create substance '{substance_ids[substance_index]}' ",
@@ -47,7 +47,7 @@ def draw_aligned_substances(
         rdkit.Chem.Kekulize(substance)
         rdkit.Chem.AllChem.Compute2DCoords(substance)
 
-        
+
         substances.append(substance)
 
     if template_smiles is None:
@@ -74,10 +74,10 @@ def draw_aligned_substances(
     rdkit.Chem.Draw.DrawingOptions.atomLabelFontSize = 55
     rdkit.Chem.Draw.DrawingOptions.dotsPerAngstrom = 100
     rdkit.Chem.Draw.DrawingOptions.bondLineWidth = 3.0
-    
+
     depictions = []
     for substance in substances:
-        
+
         rdkit.Chem.AllChem.GenerateDepictionMatching2DStructure(substance, template)
         image = rdkit.Chem.Draw.MolToImage(
             substance,

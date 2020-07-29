@@ -11,6 +11,8 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot
 import matplotlib.gridspec
+import rdkit
+import rdkit.Chem
 import MPLearn.chemoinformatics.visualize
 
 
@@ -62,13 +64,33 @@ def main(argv):
     ##############
     # Load query #
     ##############
-    substance_data = pd.read_csv(arguments.substances_path, sep="\t", header=0)
+    substances_path_extension = arguments.substances_path.split(".")[-1]
+    if substances_path_extension == "tsv":
+        substance_data = pd.read_csv(arguments.substances_path, sep="\t", header=0)
+        if arguments.substances_id_field not in substance_data.columns:
+            raise ValueError(f"substance file does not have id field '{arguments.substances_id_field}', available options are [{', '.join(substance_data.columns)}].")
 
-    if arguments.substances_id_field not in substance_data.columns:
-        raise ValueError(f"substance file does not have id field '{arguments.substances_id_field}', available options are [{', '.join(substance_data.columns)}].")
+        if arguments.substances_smiles_field not in substance_data.columns:
+            raise ValueError(f"substance file does not have smiles field '{arguments.substances_smiles_field}', available options are [{', '.join(substance_data.columns)}].")
 
-    if arguments.substances_smiles_field not in substance_data.columns:
-        raise ValueError(f"substance file does not have smiles field '{arguments.substances_smiles_field}', available options are [{', '.join(substance_data.columns)}].")
+    elif substances_path_extension == "sdf":
+        substances_ids = []
+        substances_smiles = []
+        for substance_index, substance in enumerate(
+                rdkit.Chem.SDMolSupplier(arguments.substances_path)):
+            if arguments.verbose:
+                print(f"Reading in molecule {substance_index} ...")
+            substances_ids.append(
+                substance.GetProp(arguments.substances_id_field))
+            substances_smiles.append(
+                rdkit.Chem.MolToSmiles(substance))
+        substance_data = {
+            arguments.substnace_id_field : substances_ids,
+            arguments.substance_smiles_field : substances_smiles
+        }
+    else:
+        print(f"ERROR: Unrecognized extension for --substances_path '{arguments.substances_path}'")
+        exit(1)
 
     ###########################
     # generate aligned images #

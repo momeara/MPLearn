@@ -1,0 +1,114 @@
+#!/usr/bin/env python
+# -*- tab-width:4;indent-tabs-mode:nil;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
+# vi: set ts=2 noet:
+
+import os
+import sys
+import argparse
+
+import pandas as pd
+import pyarrow.parquet
+import pyarrow as pa
+import joblib
+import numpy as np
+from MPLearn import view_cells
+import mysql.connector
+
+
+DESCRIPTION = """Take raw field images and cell ids and crop and tile cells to visualize
+version 0.0.1
+
+Example:
+    intermediate_data/cell_ids.tsv has columns
+        - 
+
+    cd MPLearn/vignettes/SARS-CoV-2/S25/
+    python view_cells \
+        --database_options client.cnf \
+        --S3_bucket sextoncov19 \
+        --S3_path_prefix CQ1 \
+        --cell_ids intermediate_data/cell_ids.tsv \
+        --output_path product/cell_images
+
+"""
+
+def main(argv):
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument(
+        "--database_options", type=str, action="store", dest="database_options",
+        help="""mysql database .cnf file with image store connection credentials (Required)""")
+    parser.add_argument(
+        "--database_options_group",
+        nargs="+",
+        type=str,
+        action="store",
+        dest="database_options_group",
+        default=["client"],
+        help="""Groups in the database options file to use (Default: client, connector_python)""")
+    parser.add_argument(
+        "--S3_bucket", type=str, action="store", dest="S3_bucket",
+        help="""Amazon S3 bucket (Required)""")
+    parser.add_argument(
+        "--S3_region", type=str, action="store", dest="S3", default='us-east-1',
+        help="""Amazon S3 region (Default: us-east-1)""")
+    parser.add_argument(
+        "--S3_path_prefix", type=str, action="store", dest="S3", default='CQ1',
+        help="""Path prefix for data in the S3 bucket (Default: CQ1)""")
+    parser.add_argument(
+        "--cell_ids", type=str, action="store", dest="cell_ids",
+        help="""A tab separated file with cells to prepare, one per line (Required)""")
+    parser.add_argument(
+        "--tile_size", type=int, action="store", dest="tile_size", default=150,
+        help="""Number of pixels on a side for each tile""")
+    parser.add_argument(
+        "--output_path", type=str, action="store", dest="output_path",
+        help="""Filter to a random subset of rows of the given size (Required)""")
+    parser.add_argument(
+        "--verbose", action="store_true", dest="verbose", default=False,
+        help="""Verbose output""")
+
+    arguments = parser.parse_args()
+
+    #check for incompatible flags
+
+    #check all provided paths exist
+    if not os.path.exists(arguments.database_options):
+        print("ERROR: Unable to read provided database options .cnf file: '{}'".format(
+            arguments.database_options))
+
+    random_state = np.random.RandomState(seed=arguments.seed)
+
+    ################
+    # Load dataset #
+    ################
+    cell_ids = pd.read_csv(arguments.cell_ids, sep="\t")
+    if arguments.verbose:
+        print("Preparing images for '{}' cells ...".format(cell_ids.shape[0]))
+
+    db_connector = mysql.conector.connect(
+        option_files=arguments.database_options)
+    db_cursor = db_connector.cursor()
+
+    cell_coordinates = retrieve_cell_coordinates_from_db(
+        db_cursor, cell_ids)
+
+    cell_images = retrieve_cell_images_from_S3(
+        region=arguments.S3_region,
+        bucket=arguments.S3_bucket,
+        cell_coodinates = cell_coordinates)
+
+    cell_images = crop_cells(
+        cell_images,
+        cell_coordinates)
+
+    cell_images = style_images(
+        cell_images,
+        cell_ids)
+
+    cell_images = montage_images(
+        cell_images,
+
+
+
+if __name__ == "__main__":
+    main(sys.argv)

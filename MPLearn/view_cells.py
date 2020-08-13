@@ -3,6 +3,7 @@
 
 import os
 import io
+import math
 import PIL
 import PIL.ImageDraw
 import PIL.ImageOps
@@ -48,7 +49,11 @@ def retrieve_cell_coordinates_from_db(
         <key_object>_AreaShape_Center_Y
 
     """
-    required_columns = ['Plate_Name', 'Image_Metadata_WellID', 'Image_Metadata_FieldID']
+    required_columns = [
+        'Plate_Name',
+        'Image_Metadata_WellID',
+        'Image_Metadata_FieldID',
+        f'{key_object}_Number_Object_Number']
     for required_column in required_columns:
         if required_column not in cell_ids.columns:
             raise Exception(f"Missing required column {required_column}")
@@ -122,11 +127,14 @@ def retrieve_image_from_S3(
     S3_resource = boto3.resource('s3', region_name=S3_region)
     S3_bucket = S3_resource.Bucket(S3_bucket)
     S3_object = S3_bucket.Object(S3_key)
-    response = S3_object.get()
+    try:
+        response = S3_object.get()
+    except Exception as exception:
+        print(f"Unrecognized S3 key with url: 'S3://{S3_bucket}.s3.{S3_region}.amazonaws.com/{S3_key}")
+        import pdb
+        pdb.set_trace()
+        raise(exception)
     image = PIL.Image.open(response['Body'], mode='r')
-    #try:
-    #except:
-    #    raise Exception(f"Unable to locate image in S3 at url S3://{S3_bucket}.s3.{S3_region}.amazonaws.com/{S3_key}")
     return image
 
 
@@ -241,6 +249,9 @@ def view_cells(
     """
     if verbose:
         print(f"Retriving information about the images for {len(cell_ids)} cells from the database...")
+
+    if not os.path.exists(database_connection_info):
+        print("'database_connection_info' path does not exist. This is typically something like '/home/ubuntu/.mysql/connectors.cnf'. See 'https://dev.mysql.com/doc/refman/8.0/en/option-files.html' for more inforamtion")
 
     con = mysql.connector.connect(
         option_files=database_connection_info,
@@ -362,10 +373,15 @@ def collate_cell_instances(
 
             cell_instance = cell_instances.iloc[instance_index]
             for column_index, value in enumerate(cell_instance):
-                cell_info_worksheet.write(
-                    1 + group_index * n_instances_per_group + instance_index,
-                    column_index,
-                    value)
+                row_index = 1 + group_index * n_instances_per_group + instance_index
+                try:
+                    cell_info_worksheet.write(
+                        row_index,
+                        column_index,
+                        value)
+                except Exception as exception:
+                    print(f"ERROR Writing value '{value}' to cell_info table in cell row={row_index} column={column_index}")
+                    print("  " + exception)
     workbook.close()
 
 

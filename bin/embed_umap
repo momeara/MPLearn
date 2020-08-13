@@ -97,6 +97,9 @@ def main(argv):
         "--umap_low_memory", action="store_true", dest="umap_low_memory", default=False,
         help="""Use UMAP's low-memory NN-lokup, may be slower (Default: False)""")
     parser.add_argument(
+        "--umap_n_epochs", type=int, action="store", dest="umap_n_epochs", default=None,
+        help="""UMAP number of epochs (Default: None)""")
+    parser.add_argument(
         "--no_save_transform", action="store_false", dest="save_transform", default=True,
         help="""Save the computed embedding transformation to re-embed other points (Default: True)""")
     parser.add_argument(
@@ -134,10 +137,10 @@ def main(argv):
         if arguments.umap_min_dist != parser.get_default('umap_min_dist'):
             print("ERROR: setting '--umap_min_dist' is incompatible with setting '--ref_embed_dir'")
             exit(1)
-        if arguments.umap_umap_a != parser.get_default('umap_a'):
+        if arguments.umap_a != parser.get_default('umap_a'):
             print("ERROR: setting '--umap_a' is incompatible with setting '--ref_embed_dir'")
             exit(1)
-        if arguments.umap_umap_b != parser.get_default('umap_b'):
+        if arguments.umap_b != parser.get_default('umap_b'):
             print("ERROR: setting '--umap_b' is incompatible with setting '--ref_embed_dir'")
             exit(1)
         if arguments.umap_negative_sample_rate != parser.get_default('umap_negative_sample_rate'):
@@ -220,6 +223,7 @@ def main(argv):
             standardize_features=arguments.standardize_features,
             ref_embed_dir="{}".format(arguments.ref_embed_dir),
             batch_size=arguments.re_embed_batch_size,
+            n_epochs=arguments.umap_n_epochs,
             verbose=arguments.verbose)
 
         clusterer_fname = "{}/hdbscan_cluster_min{}.joblib".format(
@@ -257,6 +261,7 @@ def main(argv):
             umap_a=arguments.umap_a,
             umap_b=arguments.umap_b,
             umap_negative_sample_rate=arguments.umap_negative_sample_rate,
+            umap_n_epochs=arguments.umap_n_epochs,
             low_memory=arguments.umap_low_memory,
             save_transform=arguments.save_transform,
             seed=arguments.seed,

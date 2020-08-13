@@ -31,6 +31,7 @@ def fit_embedding(
         umap_b=None,
         umap_negative_sample_rate=5,
         umap_metric='euclidean',
+        umap_n_epochs=None,
         low_memory=False,
         save_transform=True,
         seed=None,
@@ -90,7 +91,7 @@ def fit_embedding(
         init=umap_init,
         low_memory=low_memory,
         random_state=random_state,
-        n_epochs=2000,
+        n_epochs=umap_n_epochs,
         verbose=True)
     umap_embedding = umap_reducer.fit_transform(pca_embedding)
     umap_embedding = pd.DataFrame(
@@ -116,6 +117,7 @@ def fit_embedding(
         f.write("umap_negative_sample_rate\t{}\n".format(umap_negative_sample_rate))
         f.write("umap_low_memory\t{}\n".format(low_memory))
         f.write("umap_init\t{}\n".format(umap_init))
+        f.write("umap_n_epochs\t{}\n".format(umap_n_epochs))
 
     if save_transform:
         if verbose:
@@ -144,6 +146,7 @@ def embed(
         ref_embed_dir,
         standardize_features=None,
         batch_size=None,
+        n_epochs=None,
         verbose=True):
     """
     Given a previously defined embedding, embed a new dataset into it
@@ -183,6 +186,7 @@ def embed(
         pca_reducer = None
 
     umap_reducer = joblib.load(filename="{}/umap_reducer.joblib".format(ref_embed_dir))
+    umap_reducer.n_epochs = n_epochs
 
     if batch_size is None:
         n_batches = 1
@@ -219,6 +223,7 @@ def embed(
 
     with open("{}/model_info.tsv".format(embed_dir), 'a') as f:
         f.write("ref_embed_dir\t{}\n".format(ref_embed_dir))
+        f.write("n_epochs\t{}\n".format(n_epochs))
 
     pa.parquet.write_table(
         table=pa.Table.from_pandas(umap_embedding),

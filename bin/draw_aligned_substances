@@ -98,6 +98,7 @@ def main(argv):
     depictions = MPLearn.chemoinformatics.visualize.draw_aligned_substances(
         substance_smiles=substance_data[arguments.substances_smiles_field].to_list(),
         substance_ids=substance_data[arguments.substances_id_field].to_list(),
+        template_smiles=arguments.template_smiles,
         verbose=arguments.verbose)
 
     if arguments.output_n_columns is None:

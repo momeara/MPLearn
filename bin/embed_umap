@@ -3,6 +3,7 @@
 # vi: set ts=2 noet:
 
 import sys
+import shutil
 import argparse
 
 import pandas as pd
@@ -47,7 +48,7 @@ def main(argv):
         help="""Path to a parquet table on disk (Required)""")
     parser.add_argument(
         "--feature_columns", type=str, action="store", dest="feature_columns", default=None,
-        help="""A file containing columns to read in, one per line (Default: use all columns)""")
+        help="""A tab serparated file with a column 'feature' containing cell feature columns to read in (Default: use all columns)""")
     parser.add_argument(
         "--random_subset", type=int, action="store", dest="random_subset", default=None,
         help="""Filter to a random subset of rows of the given size (Default: use all rows)""")
@@ -286,6 +287,8 @@ def main(argv):
                 table=pa.Table.from_pandas(cluster_labels),
                 where="intermediate_data/{}/hdbscan_clustering_min{}.parquet".format(arguments.tag, arguments.hdbscan_min_cluster_size))
 
+    if arguments.feature_columns is not None:
+        shutil.copy(arguments.feature_columns, f"{embed_dir}/feature_columns.tsv")
 
     if arguments.random_subset is not None and arguments.random_subset < dataset.shape[0]:
         with open("{}/sample_indices.tsv".format(embed_dir), 'w') as f:

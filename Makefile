@@ -24,6 +24,8 @@ install_prereqs:
 	conda install -c conda-forge shapely
 	conda install -c bokeh selenium
 	conda install phantomjs
+	pip install nbstripout nbconvert
+
 	# make jupyter lab work with holoviews
 	jupyter labextension install jupyterlab_bokeh
 	jupyter labextension install @pyviz/jupyterlab_pyviz

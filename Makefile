@@ -9,6 +9,7 @@ install_prereqs:
 	conda install -c conda-forge boto3
 	conda install -c conda-forge mysql-connector-python
 	conda install -c conda-forge xlsxwriter
+	pip install python-bioformats
 
 	# embedding
 	conda install -c conda-forge umap-learn
@@ -132,3 +133,12 @@ start_Steatosis2020_vignette_notebooks:
 	#   ssh -i "sextonlab_linux.pem" -NfL 8887:localhost:8888 ubuntu@ec2-3-20-192-55.us-east-2.compute.amazonaws.com
 	#   natigate browser to localhost:8886
 	#   put in security token
+
+
+snakemake:
+	conda install -c conda-forge mamba
+	mamba install -c bioconda -c conda-forge snakemake
+
+
+viv:
+	conda install -c ome bioformats2raw raw2ometiff

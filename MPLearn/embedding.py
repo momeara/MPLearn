@@ -119,6 +119,10 @@ def fit_embedding(
         f.write("umap_init\t{}\n".format(umap_init))
         f.write("umap_n_epochs\t{}\n".format(umap_n_epochs))
 
+    pa.parquet.write_table(
+        table=pa.Table.from_pandas(umap_embedding),
+        where="{}/umap_embedding.parquet".format(embed_dir))
+
     if save_transform:
         if verbose:
             print("Saving transform to {}.".format(embed_dir))
@@ -134,9 +138,6 @@ def fit_embedding(
             value=umap_reducer,
             filename="{}/umap_reducer.joblib".format(embed_dir))
 
-    pa.parquet.write_table(
-        table=pa.Table.from_pandas(umap_embedding),
-        where="{}/umap_embedding.parquet".format(embed_dir))
     return umap_embedding
 
 

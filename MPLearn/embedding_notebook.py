@@ -87,9 +87,16 @@ def load_single_embedding(
             cell_meta = pa.parquet.read_table(
                 source="{}/raw_data/{}_Cell_MasterDataTable.parquet".format(experiment_path, plate_id),
                 columns=meta_columns).to_pandas()
+            if verbose:
+                print(f"cell_meta: '{experiment_path}/raw_data/{plate_id}_Cell_MasterDataTable.parquet'")
+                print(f"cell_meta shape: ({cell_meta.shape[0]},{cell_meta.shape[1]})")
         elif meta_path.endswith(".tsv.gz"):
             cell_meta = pd.read_csv(meta_path, sep="\t")
             cell_meta = cell_meta[meta_columns]
+            if verbose:
+                print(f"cell_meta: {meta_path}")
+                print(f"cell_meta shape: ({cell_meta.shape[0]},{cell_meta.shape[1]})")
+
         else:
             raise Exception(
                 f"ERROR: Unrecognized extension of metadata file {meta_path}")
@@ -106,6 +113,8 @@ def load_single_embedding(
             '{}/sample_indices.tsv'.format(embed_dir), header=None).loc[:, 0]
         if meta_columns is not None:
             cell_meta = cell_meta.iloc[sample_indices].reset_index()
+        if verbose:
+            print(f"filtering down sample_indices: '{sample_indices.shape[1]}'")
 
     embedding = pa.parquet.read_table(
         source="{}/umap_embedding.parquet".format(embed_dir)).to_pandas()
@@ -116,6 +125,11 @@ def load_single_embedding(
     else:
         cluster_labels = pa.parquet.read_table(f"{embed_dir}/clusters.parquet").to_pandas()
         cluster_labels['cluster_label'] = cluster_labels['cluster_label'].astype(int)
+
+        if verbose:
+            print(f"cluster_labels: {embed_dir}/clusters.parquet")
+            print(f"cluster_label shape: ({cluster_labels.shape[0]}, {cluster_labels.shape[1]})")
+
         if meta_columns is not None:
             embedding = pd.concat([cell_meta, embedding, cluster_labels], axis=1)
         else:
@@ -220,9 +234,6 @@ def view_UMAP_clusters(
         return (map * labels_layer *  hover_points)
     else:
         return (map * labels_layer)
-
-
-
 
 
 def view_UMAP_ROIs(

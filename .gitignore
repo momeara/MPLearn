@@ -47,3 +47,6 @@ vignettes/*/*/input/*
 vignettes/*/product/*
 vignettes/*/intermediate_data/*
 vignettes/*/input/*
+.Rhistory
+
+.ipynb_checkpoints

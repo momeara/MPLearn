@@ -8,6 +8,8 @@ install_prereqs:
 	conda install -c conda-forge h5py
 	conda install -c conda-forge boto3
 	conda install -c conda-forge mysql-connector-python
+	conda install -c conda-forge xlsxwriter
+	pip install python-bioformats
 
 	# embedding
 	conda install -c conda-forge umap-learn
@@ -22,6 +24,8 @@ install_prereqs:
 	conda install -c conda-forge shapely
 	conda install -c bokeh selenium
 	conda install phantomjs
+	pip install nbstripout nbconvert
+
 	# make jupyter lab work with holoviews
 	jupyter labextension install jupyterlab_bokeh
 	jupyter labextension install @pyviz/jupyterlab_pyviz
@@ -65,6 +69,39 @@ install_ml_support:
 install_chemoinformatic_support:
 	conda install -c conda-forge rdkit
 
+
+	sudo apt-get install cmake
+	sudo apt-get install swig
+
+	cd ~/opt
+	wget https://gitlab.com/libeigen/eigen/-/archive/3.3.7/eigen-3.3.7.tar.bz2
+	tar xvjf eigen-3.3.7.tar.bz2
+	rm -rf eigen-3.3.7.tar.bz2
+	cd eigen-3.3.7
+	mkdir build
+	cd build
+	cmake -DCMAKE_INSTALL_PREFIX=~/opt ..
+	make install
+
+	cd ~/opt
+	wget https://github.com/openbabel/openbabel/releases/download/openbabel-3-1-1/openbabel-3.1.1-source.tar.bz2
+	tar xvjf openbabel-3.1.1-source.tar.bz2
+	rm -rf openbabel-3.1.1-source.tar.bz2
+	cd openbabel-3.1.1
+	mkidr build
+	cmake -DCMAKE_INCLUDE_PATH=~/opt/include -DCMAKE_INSTALL_PREFIX=~/opt -DPYTHON_BINDINGS=ON ..
+	make -j20
+
+	cd /tmp
+	pip download openbabel
+	tar xzvf openbabel-3.1.1.tar.gz
+	rm -rf openbabel-3.1.1.tar.gz
+	cd openbabel-3.1.1
+	python setup.py build_ext -I/home/ubuntu/opt/include/openbabel3 -L/home/ubuntu/opt/lib
+	python setup.py install
+
+	pip install pybel
+
 install_acas_support:
 	sudo apt-get install libpq-dev
 
@@ -98,3 +135,12 @@ start_Steatosis2020_vignette_notebooks:
 	#   ssh -i "sextonlab_linux.pem" -NfL 8887:localhost:8888 ubuntu@ec2-3-20-192-55.us-east-2.compute.amazonaws.com
 	#   natigate browser to localhost:8886
 	#   put in security token
+
+
+snakemake:
+	conda install -c conda-forge mamba
+	mamba install -c bioconda -c conda-forge snakemake
+
+
+viv:
+	conda install -c ome bioformats2raw raw2ometiff

@@ -31,8 +31,8 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from shapely.prepared import prep
 
-
-
+import mysql.connector
+from . import view_cells
 
 def initialize_notebook():
     """
@@ -46,10 +46,10 @@ def initialize_notebook():
 def load_single_embedding(
         experiment_path,
         embedding_tag,
-        cluster_embedding_tag=None,
         plate_id=None,
         meta_path=None,
-        meta_columns=['Compound', 'dose_nM']):
+        meta_columns=['Compound', 'dose_nM'],
+        verbose=False):
     """load cell embedding from an embed_umap run
 
     Example:
@@ -66,11 +66,6 @@ def load_single_embedding(
             embedding_tag="hits_plate_scaled_200522a_umap2_2M_15_0.0",
             plate_id="covid19cq1_SARS_2007A_plate_scaled",
             meta_columns=meta_columns),
-
-    If cluster_embedding_tag
-        is None --> Use <embedding_tag>
-        is False --> Don't load cluster labels
-        is given --> Use cluster labels defined in the given directory
 
     Returns: pd.DataFrame with for each cell in <experiment> with columns:
              <meta_columns> UMAP_1 ... cluster_label
@@ -92,9 +87,16 @@ def load_single_embedding(
             cell_meta = pa.parquet.read_table(
                 source="{}/raw_data/{}_Cell_MasterDataTable.parquet".format(experiment_path, plate_id),
                 columns=meta_columns).to_pandas()
+            if verbose:
+                print(f"cell_meta: '{experiment_path}/raw_data/{plate_id}_Cell_MasterDataTable.parquet'")
+                print(f"cell_meta shape: ({cell_meta.shape[0]},{cell_meta.shape[1]})")
         elif meta_path.endswith(".tsv.gz"):
             cell_meta = pd.read_csv(meta_path, sep="\t")
             cell_meta = cell_meta[meta_columns]
+            if verbose:
+                print(f"cell_meta: {meta_path}")
+                print(f"cell_meta shape: ({cell_meta.shape[0]},{cell_meta.shape[1]})")
+
         else:
             raise Exception(
                 f"ERROR: Unrecognized extension of metadata file {meta_path}")
@@ -111,22 +113,23 @@ def load_single_embedding(
             '{}/sample_indices.tsv'.format(embed_dir), header=None).loc[:, 0]
         if meta_columns is not None:
             cell_meta = cell_meta.iloc[sample_indices].reset_index()
+        if verbose:
+            print(f"filtering down sample_indices: '{sample_indices.shape[1]}'")
 
     embedding = pa.parquet.read_table(
         source="{}/umap_embedding.parquet".format(embed_dir)).to_pandas()
 
-    if cluster_embedding_tag is False:
+    if not os.path.exists(f"{embed_dir}/clusters.parquet"):
         if meta_columns is not None:
             embedding = pd.concat([cell_meta, embedding], axis=1)
     else:
-        if cluster_embedding_tag is not None:
-            cluster_embed_dir = "{}/intermediate_data/{}".format(
-                experiment_path, cluster_embedding_tag)
-        else:
-            cluster_embed_dir = embed_dir
-        cluster_labels = pa.parquet.read_table(
-            "{}/hdbscan_clustering_min100.parquet".format(cluster_embed_dir)).to_pandas()
+        cluster_labels = pa.parquet.read_table(f"{embed_dir}/clusters.parquet").to_pandas()
         cluster_labels['cluster_label'] = cluster_labels['cluster_label'].astype(int)
+
+        if verbose:
+            print(f"cluster_labels: {embed_dir}/clusters.parquet")
+            print(f"cluster_label shape: ({cluster_labels.shape[0]}, {cluster_labels.shape[1]})")
+
         if meta_columns is not None:
             embedding = pd.concat([cell_meta, embedding, cluster_labels], axis=1)
         else:
@@ -177,7 +180,11 @@ def save_embedding_plot(
         canvas = datashader.transfer_functions.set_background(canvas, background_color)
     canvas.to_pil().convert('RGB').save(output_fname)
 
-def view_UMAP_clusters(embedding, label=""):
+def view_UMAP_clusters(
+        embedding,
+        label="",
+        cluster_labels=True,
+        cluster_label_color='red'):
     """Return a HoloMap of a UMAP Embedding colored by cluster id
 
     Input: embedding: Embedding with columns [<cell_meta_columns>, 'UMAP_1', 'UMAP_2', 'cluster_label']
@@ -209,9 +216,24 @@ def view_UMAP_clusters(embedding, label=""):
     hover_points = decimate(points)
     hover_points.opts(tools=['hover'], alpha=0)
 
-    return (map * hover_points)
-
-
+    if cluster_labels:
+        label_coords = []
+        label_text = []
+        for cluster_label in embedding['cluster_label'].unique():
+            center_x = np.mean(embedding[embedding.cluster_label == cluster_label]['UMAP_1'])
+            center_y = np.mean(embedding[embedding.cluster_label == cluster_label]['UMAP_2'])
+            label_coords.append([center_x, center_y])
+            label_text.append(f"Cluster {cluster_label}")
+        label_coords = np.array(label_coords)
+        labels_layer = holoviews.Labels(
+            {('x','y'): label_coords, 'text': label_text},
+            ['x', 'y'],
+            'text').opts(
+                holoviews.opts.Labels(
+                    text_color=cluster_label_color))
+        return (map * labels_layer *  hover_points)
+    else:
+        return (map * labels_layer)
 
 
 def view_UMAP_ROIs(
@@ -450,3 +472,41 @@ def load_regions_of_interest(
         ys.append(regions_of_interest[regions_of_interest.roi_index == roi_index]['yz'].to_list())
     return holoviews.streams.FreehandDraw(
         data={'xs' : xs, 'ys' : ys})
+
+
+
+def embedding_cell_images(
+        database_options,
+        S3_region,
+        S3_bucket,
+        S3_key_template,
+        cell_ids,
+        dyes,
+        saturations,
+        color_maps,
+        width,
+        height,
+        verbose=False):
+
+    db_connector = mysql.conector.connect(
+        option_files=database_options)
+    db_cursor = db_connector.cursor()
+
+    cell_coordinates = view_cells.retrieve_cell_coordinates_from_db(
+        db_cursor, cell_ids)
+
+    cell_images = view_cells.retrieve_cell_images_from_S3(
+        region = S3_region,
+        bucket = S3_bucket,
+        cell_coodinates = cell_coordinates)
+
+    cell_images = crop_cells(
+        cell_images,
+        cell_coordinates)
+
+    cell_images = style_images(
+        cell_images,
+        cell_ids)
+
+    cell_images = montage_images(
+        cell_images)

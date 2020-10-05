@@ -68,6 +68,7 @@ def run_hill_model():
         num_sanity_val_steps=0,
         max_epochs=2000,
         logger=logger,
+        gradient_clip_val=0.5,
         track_grad_norm=2)
     trainer.fit(model)
 run_hill_model()

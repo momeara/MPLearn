@@ -20,8 +20,11 @@ def run_toy_model():
 
     logger = pytorch_lightning.loggers.TestTubeLogger(
         save_dir=root_dir,
-        name="test_top_model")
-    logger.experiment.tag({'design_size': 51, 'optimizer': 'ace'}) 
+        name="test_toy_model")
+    logger.experiment.tag(
+        {'design_size': 51,
+         'optimizer': 'ace',
+         'clip_gradient_val': .5})
 
     parent_parser = ArgumentParser(add_help=False)
 
@@ -36,8 +39,12 @@ def run_toy_model():
     hparams = parser.parse_args(args=[
         '--device', device,
         '--optimizer_name', 'exponential',
-        '--exponential_lr_start', '.001',
-        '--exponential_lr_end', '.001',
+        '--exponential_lr_start', '.01',
+        '--exponential_lr_end', '.01',
+        '--knot0_prior_mu', '1',
+        '--knot0_prior_sd', '5',
+        '--knot0_prior_mu', '1',
+        '--knot0_prior_sd', '5',        
         '--num_samples', '20',
         '--design_size', '51'])
     model = toy_model.ToyModel(hparams)
@@ -45,6 +52,8 @@ def run_toy_model():
     trainer = pytorch_lightning.Trainer(
         num_sanity_val_steps=0,
         max_epochs=2000,
+        gradient_clip_val=.1,
+        track_grad_norm=2,
         gpus=torch.cuda.device_count(),
         logger=logger)
 

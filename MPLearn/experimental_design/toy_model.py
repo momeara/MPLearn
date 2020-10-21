@@ -97,7 +97,7 @@ class ToyModel(dose_response_model.DoseResponseExperimentalDesignModel):
 #            steps=self.hparams.design_size,
 #            device=self.hparams.device)
         design_init = torch.tensor(
-            [1.0]*self.hparams.design_size,
+            [.5]*self.hparams.design_size,
             device=self.hparams.device)
         design_constraint = constraints.interval(*self.hparams.design_range)
         design = pyro.param("design", design_init, constraint=design_constraint)

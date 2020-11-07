@@ -85,7 +85,7 @@ def main(argv):
             substances_smiles.append(
                 rdkit.Chem.MolToSmiles(substance))
         substance_data = {
-            arguments.substnace_id_field : substances_ids,
+            arguments.substance_id_field : substances_ids,
             arguments.substance_smiles_field : substances_smiles
         }
     else:

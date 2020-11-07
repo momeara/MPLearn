@@ -85,10 +85,10 @@ def load_single_embedding(
 
         if meta_path.endswith(".parquet"):
             cell_meta = pa.parquet.read_table(
-                source="{}/raw_data/{}_Cell_MasterDataTable.parquet".format(experiment_path, plate_id),
+                source=meta_path,
                 columns=meta_columns).to_pandas()
             if verbose:
-                print(f"cell_meta: '{experiment_path}/raw_data/{plate_id}_Cell_MasterDataTable.parquet'")
+                print(f"cell_meta: '{meta_path}'")
                 print(f"cell_meta shape: ({cell_meta.shape[0]},{cell_meta.shape[1]})")
         elif meta_path.endswith(".tsv.gz"):
             cell_meta = pd.read_csv(meta_path, sep="\t")
@@ -96,10 +96,16 @@ def load_single_embedding(
             if verbose:
                 print(f"cell_meta: {meta_path}")
                 print(f"cell_meta shape: ({cell_meta.shape[0]},{cell_meta.shape[1]})")
-
         else:
             raise Exception(
                 f"ERROR: Unrecognized extension of metadata file {meta_path}")
+
+        # check that all the requested meta columns were found
+        for meta_column in meta_columns:
+            if meta_column not in cell_meta.columns:
+                print(f"ERROR: Meta column '{meta_column}' not found in dataset '{meta_path}'")
+
+
 
     embed_dir = "{}/intermediate_data/{}".format(experiment_path, embedding_tag)
     if not os.path.exists(embed_dir):

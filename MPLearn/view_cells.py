@@ -15,24 +15,91 @@ import matplotlib as mpl
 import xlsxwriter
 
 
-
-
-def retrieve_cell_coordinates_from_db(
+def retrieve_object_coordinates_from_db(
         con,
-        cell_ids,
+        object_ids,
         key_object,
-        dyes,
         verbose=False):
     """
-    cell_ids is a pd.DataFrame with rows representing cells and columns
+    object_ids is a pd.DataFrame with rows representing objects and columns
         Plate_Name
         Image_Metadata_WellID
         Image_Metadata_FieldID
-        <cell_id_column>
+        <key_object>_Number_Object_Number
+
+    Retrieve image information from
+        <Plate_Name>_Per_<key_object>
+
+    Return a DataFrame for each (object, dye) with columns
+        Plate_Name
+        ImageNumber
+        <key_object>_Number_Object_Number
+        <key_object>_AreaShape_Center_X
+        <key_object>_AreaShape_Center_Y
+
+    """
+    required_columns = [
+        "Plate_Name",
+        'Image_Metadata_WellID',
+        'Image_Metadata_FieldID',
+        f'{key_object}_Number_Object_Number']
+    for required_column in required_columns:
+        if required_column not in object_ids.columns:
+            raise Exception(f"Missing required column {required_column}")
+
+    object_coordinates = []
+    cursor = con.cursor()
+    for object_index in range(object_ids.shape[0]):
+        object_params = object_ids.iloc[object_index]
+        if verbose:
+            print(f"Getting coordinates for object:")
+            print(f"   Plate_Name: '{object_params['Plate_Name']}'")
+            print(f"   Image_Metadata_WellID: '{object_params['Image_Metadata_WellID']}'")
+            print(f"   Image_Metadata_FieldID: '{object_params['Image_Metadata_FieldID']}'")
+            print(f"   {key_object}_Number_Object_Number: '{object_params[f'{key_object}_Number_Object_Number']}'")
+        #Object Info
+        query = f"""
+            SELECT
+                key_object.{key_object}_AreaShape_Center_X,
+                key_object.{key_object}_AreaShape_Center_Y
+            FROM
+                {f"{object_params['Plate_Name']}_Per_Image"} AS image,
+                {f"{object_params['Plate_Name']}_Per_{key_object}"} AS key_object
+            WHERE
+                image.Image_Metadata_WellID = '{object_params['Image_Metadata_WellID']}' AND
+                image.Image_Metadata_FieldID = '{object_params['Image_Metadata_FieldID']}'
+                key_object.ImageNumber = image.ImageNumber AND
+                key_object.{key_object}_Number_Object_Number = {object_params[f'{key_object}_Number_Object_Number']};
+        """
+        if verbose:
+            print(query)
+
+        cursor.execute(query)
+        values = cursor.fetchone()
+
+        object_coordinates.append(dict(
+            object_params.to_dict(), **{
+				f"{key_object}_AreaShape_Center_X" : values[0],
+				f"{key_object}_AreaShape_Center_Y" : values[1]}))
+    cursor.close()
+    object_coordinates = pd.DataFrame(object_coordinates)
+    return object_coordinates
+
+
+def retrieve_image_coordinates_from_db(
+        con,
+        image_ids,
+        dyes,
+        verbose=False):
+    """
+    image_ids is a pd.DataFrame with rows representing cells and columns
+        Plate_Name
+        Image_Metadata_WellID
+        Image_Metadata_FieldID
+
 
     Retrieve image information from
         <Plate_Name>_Per_Image
-        <Plate_Name>_Per_Cell
 
     Return a DataFrame for each (cell, dye) with columns
         Plate_Name
@@ -44,30 +111,25 @@ def retrieve_cell_coordinates_from_db(
         Image_FileName
         Image_Height
         Image_Width
-        <key_object>_Number_Object_Number
-        <key_object>_AreaShape_Center_X,
-        <key_object>_AreaShape_Center_Y
 
     """
     required_columns = [
         'Plate_Name',
         'Image_Metadata_WellID',
-        'Image_Metadata_FieldID',
-        f'{key_object}_Number_Object_Number']
+        'Image_Metadata_FieldID']
     for required_column in required_columns:
-        if required_column not in cell_ids.columns:
+        if required_column not in image_ids.columns:
             raise Exception(f"Missing required column {required_column}")
 
-    cell_coordinates = []
+    image_coordinates = []
     cursor = con.cursor()
-    for cell_index in range(cell_ids.shape[0]):
-        cell_params = cell_ids.iloc[cell_index]
+    for image_index in range(image_ids.shape[0]):
+        image_params = image_ids.iloc[image_index]
         if verbose:
             print(f"Getting coordinates for cell and for each dye in [{', '.join(dyes)}]:")
-            print(f"   Plate_Name: '{cell_params['Plate_Name']}'")
-            print(f"   Image_Metadata_WellID: '{cell_params['Image_Metadata_WellID']}'")
-            print(f"   Image_Metadata_FieldID: '{cell_params['Image_Metadata_FieldID']}'")
-            print(f"   {key_object}_Number_Object_Number: '{cell_params[f'{key_object}_Number_Object_Number']}'")
+            print(f"   Plate_Name: '{image_params['Plate_Name']}'")
+            print(f"   Image_Metadata_WellID: '{image_params['Image_Metadata_WellID']}'")
+            print(f"   Image_Metadata_FieldID: '{image_params['Image_Metadata_FieldID']}'")
 
         #Image Info
         file_name_fields = [f"Image_FileName_{dye}" for dye in dyes]
@@ -79,36 +141,30 @@ def retrieve_cell_coordinates_from_db(
                 image.ImageNumber,
                 image.{", ".join(file_name_fields)},
                 image.{", ".join(width_fields)},
-                image.{", ".join(height_fields)},
-                key_object.{key_object}_AreaShape_Center_X,
-                key_object.{key_object}_AreaShape_Center_Y
+                image.{", ".join(height_fields)}
             FROM
-                {f"{cell_params['Plate_Name']}_Per_Image"} AS image,
-                {f"{cell_params['Plate_Name']}_Per_{key_object}"} AS key_object
+                {f"{image_params['Plate_Name']}_Per_Image"} AS image
             WHERE
-                Image_Metadata_WellID = '{cell_params['Image_Metadata_WellID']}' AND
-                Image_Metadata_FieldID = '{cell_params['Image_Metadata_FieldID']}' AND
-                key_object.ImageNumber = image.ImageNumber AND
-                key_object.{key_object}_Number_Object_Number = {cell_params[f'{key_object}_Number_Object_Number']};
+                image.Image_Metadata_WellID = '{image_params['Image_Metadata_WellID']}' AND
+                image.Image_Metadata_FieldID = '{image_params['Image_Metadata_FieldID']}'
         """
         cursor.execute(query)
         values = cursor.fetchone()
 
         for dye_index, dye in enumerate(dyes):
-            cell_coordinates.append(dict(
-                cell_params.to_dict(), **{
+            image_coordinates.append(dict(
+                image_params.to_dict(), **{
 				"Image_Metadata_PlateID" : values[0],
 				"ImageNumber" : values[1],
 				"Dye" : dye,
                 "Dye_Number" : dye_index + 1,
 				"Image_FileName" : values[2 + dye_index],
 				"Image_Width" : values[2 + len(dyes) + dye_index],
-				"Image_Height" : values[2 + 2*len(dyes) + dye_index],
-				f"{key_object}_AreaShape_Center_X" : values[2 + 3*len(dyes)],
-				f"{key_object}_AreaShape_Center_Y" : values[2 + 3*len(dyes) + 1]}))
+				"Image_Height" : values[2 + 2*len(dyes) + dye_index]}))
     cursor.close()
-    cell_coordinates = pd.DataFrame(cell_coordinates)
-    return cell_coordinates
+    image_coordinates = pd.DataFrame(image_coordinates)
+    return image_coordinates
+
 
 
 def retrieve_image_from_S3(
@@ -233,6 +289,7 @@ def view_cells(
     Example options for view_cells for the SARS-CoV-2 pseudo time experiment
 
         view_cells(
+            cell_ids,
             database_connection_info="/home/ubuntu/.mysql/connectors.cnf",
             database_options_group="covid19cq1",
             S3_region="us-east-1",
@@ -257,10 +314,20 @@ def view_cells(
         option_files=database_connection_info,
         option_groups=database_options_group)
 
-    cell_coordinates = retrieve_cell_coordinates_from_db(
+    if (f"{key_object}_AreaShape_Center_X" not in cell_ids.columns) or \
+        (f"{key_object}_AreaShape_Center_Y" not in cell_ids.columns):
+        object_coordinates = retrieve_object_coordinates_from_db(
+            con=con,
+            object_ids=cell_ids,
+            key_object=key_object,
+            verbose=verbose)
+    else:
+        object_coordinates = cell_ids
+
+    # object coordinates now has (n cells x n dyes) number of rows
+    object_coordinates = retrieve_image_coordinates_from_db(
         con=con,
-        cell_ids=cell_ids,
-        key_object=key_object,
+        image_ids=object_coordinates,
         dyes=dyes,
         verbose=verbose)
 
@@ -270,7 +337,7 @@ def view_cells(
         S3_region=S3_region,
         S3_bucket=S3_bucket,
         S3_key_template=S3_key_template,
-        cell_coordinates=cell_coordinates,
+        cell_coordinates=object_coordinates,
         verbose=verbose)
 
     n_dyes = len(dyes)
@@ -282,7 +349,7 @@ def view_cells(
         if verbose:
             print(f"  making image for cell {cell_index}")
         for dye_index in range(len(dyes)):
-            coords = cell_coordinates.iloc[cell_index*n_dyes + dye_index]
+            coords = object_coordinates.iloc[cell_index*n_dyes + dye_index]
             dye_image = dye_images[cell_index*n_dyes + dye_index]
 
             dye_image = crop_image(
@@ -341,13 +408,13 @@ def collate_cell_instances(
     for group_index, group_value in enumerate(group_values):
         row = group_index + 1
         image_worksheet.set_row(row, image_cell_height)
-        image_worksheet.write(row, 0, f"{group_value}")
+        image_worksheet.write(row, 0, f"Cluster {group_value}")
 
     # write image worksheet column titles
     for instance_index in range(n_instances_per_group):
         column = instance_index + 1
         image_worksheet.write(0, column, f"Instance {instance_index}")
-    image_worksheet.set_column(0, n_instances_per_group, image_cell_width)
+    image_worksheet.set_column(1, n_instances_per_group, image_cell_width)
 
     # write cell info column labels
     for column, column_name in enumerate(cell_ids.columns):

@@ -72,7 +72,7 @@ def main(argv):
         help="""Dimension of the preliminary PCA embedding (Default: PCA with no-dimensionality reduction)""")
     parser.add_argument(
         "--pca_batch_size", type=int, action="store", dest="pca_batch_size", default=1000,
-        help="""Batch size of streaming PCA embedding (Default: 1000)""")
+        help="""Batch size of streaming PCA embedding (Default: min(n_features, 1000))""")
     parser.add_argument(
         "--umap_n_components", type=int, action="store", dest="umap_n_components", default=2,
         help="""Dimension of the resulting UMAP embedding (Default: 2)""")
@@ -254,7 +254,7 @@ def main(argv):
             embed_dir=embed_dir,
             standardize_features=arguments.standardize_features is None or arguments.standardize_features,
             pca_n_components=arguments.pca_n_components,
-            pca_batch_size=arguments.pca_batch_size,
+            pca_batch_size=np.min(arguments.pca_batch_size, dataset.shape[1]),
             umap_n_components=arguments.umap_n_components,
             umap_init=arguments.umap_init,
             umap_n_neighbors=arguments.umap_n_neighbors,

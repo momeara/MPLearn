@@ -180,7 +180,7 @@ def main(argv):
         if arguments.feature_columns is not None:
             dataset.append(pa.parquet.read_table(
                 source=dataset_path,
-                columns=feature_columns['feature'],
+                columns=feature_columns['feature'].to_list(),
             ).to_pandas().astype('float32'))
         else:
             dataset.append(pa.parquet.read_table(

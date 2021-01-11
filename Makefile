@@ -1,4 +1,14 @@
 
+install_system_prereqs:
+	# https://github.com/s3fs-fuse/s3fs-fuse
+	sudo apt install s3fs
+	# allow non-root to mount
+	sudo cat "user_allow_other" > /etc/fuse.conf
+	sudo chmod a+r /etc/fuse.conf
+
+	# to load HDF5 dataset
+	sudo apt install libhdf5-serial-dev
+
 install_prereqs:
 	# data tools
 	conda install setuptools pandas joblib scikit-learn nodejs

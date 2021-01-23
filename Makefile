@@ -1,13 +1,24 @@
 
 install_system_prereqs:
 	# https://github.com/s3fs-fuse/s3fs-fuse
-	sudo apt install s3fs
+	sudo apt-get install -y s3fs
 	# allow non-root to mount
 	sudo cat "user_allow_other" > /etc/fuse.conf
 	sudo chmod a+r /etc/fuse.conf
 
 	# to load HDF5 dataset
-	sudo apt install libhdf5-serial-dev
+	sudo apt install -y libhdf5-serial-dev
+
+	# Monocle3 requirements
+	sudo add-apt-repository ppa:cran/libgit2
+	sudo apt-get update
+	sudo apt-get install -y libssh2-1-dev libgit2-dev
+	sudo apt-get install -y libudunits2-dev
+	sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
+	sudo apt-get update
+	sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev
+
+	sudo apt-get install -y libv8-dev
 
 install_prereqs:
 	# data tools

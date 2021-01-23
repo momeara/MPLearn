@@ -248,8 +248,6 @@ def main(argv):
         if arguments.verbose:
             print("Computing UMAP embedding ...")
 
-        import pdb;
-        pdb.set_trace()
         embed_dir = "intermediate_data/{}".format(arguments.tag)
         umap_embedding = embedding.fit_embedding(
             dataset=dataset,

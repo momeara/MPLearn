@@ -210,7 +210,7 @@ def embed(
         columns=["UMAP_" + str(i+1) for i in range(umap_embedding.shape[1])])
     end_time = time.time()
     if verbose:
-        print("embedded data onto {0} runtime: {1:.2f}s".format(embed_dir, begin_time-end_time))
+        print("embedded data onto {0} runtime: {1:.2f}s".format(embed_dir, end_time-begin_time))
 
     if verbose:
         print("Copying model info from reference embed dir.")

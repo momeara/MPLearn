@@ -36,6 +36,7 @@ install_prereqs:
 	conda install -c conda-forge umap-learn
 	conda install -c conda-forge hdbscan
 	conda install -c conda-forge leidenalg
+	conda install -c conda-forge pot
 
 	# notebook support
 	conda install -c conda-forge holoviews
@@ -52,6 +53,9 @@ install_prereqs:
 	jupyter labextension install @pyviz/jupyterlab_pyviz
 	echo "c = get_config()" >> $(jupyter --config_dir)/jupyter_notebook_config.py
 	echo "c.NotebookApp.iopub_data_rate_limit=100000000" >> $(jupyter --config_dir)/jupyter_notebook_config.py
+
+	# update all packages
+	conda update --all
 
 
 install:

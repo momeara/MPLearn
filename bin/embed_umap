@@ -24,7 +24,7 @@ Example:
 Fit and embed the full cell features matrix:
 
     cd MPLearn/vignettes/Steatosis2020/umap_embedding_200217
-    python embed_umap \
+    embed_umap \
         --dataset intermediate_data/cf10k.parquet \
         --tag cell_features_pca_umap2_15_0.0 \
         --umap_n_components 2 \

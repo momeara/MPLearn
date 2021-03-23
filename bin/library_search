@@ -12,11 +12,11 @@ DESCRIPTION = """Screen a set of query molecules against a library for chemical 
 version 0.0.1
 
 Example:
-    cd MPLearn/vignettes/candida_albicans_filamentation
+    cd MPProjects/candida_albicans_filamentation
     python library_search \
-        --query_path query.smi \
-        --library_path library.sdf \
-        --output_path results.tsv
+        --query_path raw_data/query.smi \
+        --library_path raw_data/library.sdf \
+        --output_path product/results.tsv
 
 """
 

@@ -25,7 +25,7 @@ setup(
         'mysql' : ['mysql>=5.7.20'],
         'umap-learn' : ['umap-learn>0.3.6'],
     },
-    scripts=['bin/embed_umap', 'bin/embed_substances'],
+    scripts=['bin/embed_umap', 'bin/featurize_substances'],
     tests_require=['pytest'],
     url='http://github.com/momeara/MPLearn',
     keywords='machine learning CellPaining',

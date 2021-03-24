@@ -296,7 +296,7 @@ def main(argv):
 
     embedding_notebook.save_embedding_plot(
         embedding=umap_embedding,
-        output_fname="product/figures/{}_embedding.png".format(arguments.tag))
+        output_fname=f"{embed_dir}/embedding.png")
 
 
 

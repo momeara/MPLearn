@@ -103,7 +103,17 @@ def main(argv):
         print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
         print(f"Recognized extensions are 'tsv' and 'sdf'")
         exit(1)
-                        
+
+    # check that the output path exists
+    if os.path.isdir(arguments.output_path):
+        if verbose:
+            print(f"Output directory '{arguments.output_path}' already exists.")
+    else:
+        if verbose:
+            print(f"Creating output directory '{arguments.output_path}' ...")
+        os.mkdir(arguments.output_path)
+
+
     ###################################
     # Get fingerprints for substances #
     ###################################

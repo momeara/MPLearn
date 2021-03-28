@@ -3,6 +3,7 @@
 
 import sys
 import argparse
+import os
 import pandas as pd
 import pyarrow.parquet
 import pyarrow as pa
@@ -81,6 +82,14 @@ def main(argv):
         "--fingerprint_type", type=str, action="store", dest="fingerprint_type", default="ECFP4",
         help="""Fingerprint type for the query and library compounds over which to compute the tanimoto similarity""")
     parser.add_argument(
+        "--fingerprint_n_bits",
+        type = int,
+        action = "store",
+        dest = "fingerprint_n_bits",
+        default = 1024,
+        help = """Fingerprint number of bits, defaults to 1024""")
+
+    parser.add_argument(
         "--verbose", action="store_true", dest="verbose",
         help="""Give verbose output (Default: False)""")
 
@@ -106,10 +115,10 @@ def main(argv):
 
     # check that the output path exists
     if os.path.isdir(arguments.output_path):
-        if verbose:
+        if arguments.verbose:
             print(f"Output directory '{arguments.output_path}' already exists.")
     else:
-        if verbose:
+        if arguments.verbose:
             print(f"Creating output directory '{arguments.output_path}' ...")
         os.mkdir(arguments.output_path)
 
@@ -142,6 +151,7 @@ def main(argv):
             substance_data[arguments.smiles_field],
             substance_data[arguments.substance_id_field],
             fingerprint_type = arguments.fingerprint_type,
+            fingerprint_n_bits = arguments.fingerprint_n_bits,
             verbose = arguments.verbose)
     else:
         print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")

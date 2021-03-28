@@ -77,6 +77,11 @@ def fit_embedding(
         if verbose:
             print(f"Requesting PCA n_components of {pca_n_components} but the dataset only has {dataset.shape[0]} rows, setting pca_n_components to {dataset.shape[0]}")
 
+    if pca_batch_size < pca_n_components:
+        if verbose:
+            print(f"Adjusting PCA batch size to be at least the number of components '{pca_n_components}'")
+        pca_batch_size = pca_n_components
+
     if verbose:
         print("Reducing the dimension by PCA from {} to {} dimensions".format(dataset.shape[1], pca_n_components))
     pca_reducer = IncrementalPCA(

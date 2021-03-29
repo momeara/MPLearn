@@ -5,8 +5,10 @@
 from typing import Sequence
 import numpy as np
 import pandas as pd
+import tqdm
 import rdkit.Chem
 import rdkit.Chem.rdMolDescriptors
+
 
 # for APDP pairs
 from rdkit.Chem.AtomPairs import Pairs
@@ -41,7 +43,7 @@ def generate_fingerprints_smiles(
 
     fingerprints = []
     substance_ids_generated = []
-    for index, substance_smiles in enumerate(smiles):
+    for index, substance_smiles in enumerate(tqdm.tqdm(smiles)):
         try:
             molecule = rdkit.Chem.MolFromSmiles(substance_smiles, sanitize=False)
         except:

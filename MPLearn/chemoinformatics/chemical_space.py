@@ -2,67 +2,110 @@
 # vi: set ts=2 noet:
 
 
+from typing import Sequence
+import numpy as np
+import pandas as pd
+import rdkit.Chem
+import rdkit.Chem.rdMolDescriptors
+
+# for APDP pairs
+from rdkit.Chem.AtomPairs import Pairs
+from rdkit.Chem.AtomPairs import Sheridan
+from rdkit import DataStructs
+
 def generate_fingerprints_smiles(
-        smiles: str,
+        smiles: Sequence[str],
+        substance_ids: Sequence[str],
         fingerprint_type: str = 'ECFP4',
-        verbose=False):
+        fingerprint_n_bits = 1024,
+        verbose = False):
     """
     Generate fingerprints for a set of molecules
 
     Args:
         smiles: a list of smiles strings
         fingerprint_type: type of fingerprint to represent molecules for comparison
+        fingerprint_n_bits: number of bits in the returned fingerprint
 
     Returns:
         List[Dict[query_id:str, <library_fields>, tanimoto_similarity:float]]
     """
-    valid_fingerprint_types = ['ECFP4']
+    valid_fingerprint_types = ['ECFP4', 'APDP']
     if fingerprint_type not in valid_fingerprint_types:
         raise ValueError((
             f"Unrecognized fingerprint_type '{fingerprint_type}'. ",
             f"Valid options are [{', '.join(valid_fingerprint_types)}]"))
 
-    if isinstance(substance, str):
-        substance = [substance]
+    if isinstance(smiles, str):
+        smiles = [smiles]
 
     fingerprints = []
-    for index, substance_smiles in enumerate(smiles)
-        if fingerprint_type == "ECFP4":
+    substance_ids_generated = []
+    for index, substance_smiles in enumerate(smiles):
+        try:
             molecule = rdkit.Chem.MolFromSmiles(substance_smiles, sanitize=False)
-            if molecule is None:
-                print((
-                    f"WARNING: RDKit failed to create molecule '{index}' ",
-                    f"with smiles '{substance_smiles}'; skipping..."))
-                fingerprints.append(None)
-                continue
+        except:
+            print((
+                f"WARNING: RDKit failed to create molecule '{index}' ",
+                f"with smiles '{substance_smiles}'; skipping..."))
+            continue
 
-                try:
-                    molecule = rdkit.Chem.RemoveHs(molecule) # Also Sanitizes
-                except ValueError as e:
-                    print((
-                        f"WARNING: {str(e)}. Skipping molecule '{index}' ",
-                        f"with smiles '{smiles}'."))
-                    fingerprints.append(None)
-                    continue
+        if molecule is None:
+            print((
+                f"WARNING: RDKit failed to create molecule '{index}' ",
+                f"with smiles '{substance_smiles}'; skipping..."))
+            continue
+
+        try:
+            molecule.UpdatePropertyCache(strict=False)
+            molecule = rdkit.Chem.AddHs(molecule, addCoords=True)
+            molecule = rdkit.Chem.RemoveHs(molecule) # Also Sanitizes
+        except ValueError as e:
+            print((
+                f"WARNING: {str(e)}. Skipping molecule '{index}' ",
+                f"with smiles '{smiles}'."))
+            continue
+
+        if fingerprint_type == "ECFP4":
             try:
                 fingerprint = rdkit.Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(
-                    mol=molecule, radius=2, nBits=1024)
+                    mol=molecule, radius=2, nBits=fingerprint_n_bits)
 
             except:
                 print(f"WARNING: Unable to generate fingerprint for library molecule with index {index}")
-                fingerprints.append(None)
                 continue
             fingerprints.append(fingerprint)
-    fingerprints = np.array(fingerprints)
-    return fingerprints
-    
+            substance_ids_generated.append(substance_ids[index])
 
+        elif fingerprint_type == "APDP":
+            ap_fp = Pairs.GetAtomPairFingerprint(molecule)
+            dp_fp = Sheridan.GetBPFingerprint(molecule)
+            #ap_fp.GetLength() == 8388608
+            #dp_fp.GetLength() == 8388608
+            #16777216 = 8388608 + 8388608
+
+            fingerprint = np.zeros(fingerprint_n_bits)
+            for i in ap_fp.GetNonzeroElements().keys():
+                fingerprint[i % fingerprint_n_bits] = 1
+            for i in dp_fp.GetNonzeroElements().keys():
+                fingerprint[(i + 8388608) % fingerprint_n_bits] = 1
+        else:
+            print(f"ERROR: Unrecognized fingerprint type '{fingerprint_type}'")
+            exit(1)
+
+        fingerprints.append(fingerprint)
+        substance_ids_generated.append(substance_ids[index])
+
+    fingerprints = np.array(fingerprints)
+    return substance_ids_generated, fingerprints
+
+# needs some debugging
 def generate_fingerprints_sdf(
         library_path: str,
         library_fields: Sequence[str],
         fingerprint_type: str = 'ECFP4',
         verbose=False):
-        
+
     """
     Generate fingerprints for substances in the library
 
@@ -90,7 +133,6 @@ def generate_fingerprints_sdf(
     for library_substance_index, library_substance in enumerate(rdkit.Chem.SDMolSupplier(library_path)):
         if fingerprint_type == "ECFP4":
             try:
-                import pdb; pdb.set_trace()
                 library_fingerprint = rdkit.Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(
                     mol=library_substance, radius=2, nBits=1024)
             except:
@@ -116,8 +158,7 @@ def generate_fingerprints_sdf(
     if verbose:
         print(f"Found library contains {len(results)} substances.")
 
-    fingerprint = np.array(fingerprints)
+    fingerprint = np.stack(fingerprints)
     substances = pd.DataFrame(substances)
 
     return fingerprints, substances
-    

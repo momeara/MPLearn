@@ -27,7 +27,7 @@ setup(
         'holovoiews' : ['holoviews>=1.10.9'],
         'mysql' : ['mysql>=5.7.20'],
     },
-    scripts=['bin/embed_umap', 'bin/embed_substances'],
+    scripts=['bin/embed_umap', 'bin/featurize_substances'],
     tests_require=['pytest'],
     url='http://github.com/momeara/MPLearn',
     keywords='machine learning CellPaining',

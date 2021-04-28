@@ -1,10 +1,16 @@
+# -*- tab-width:4;indent-tabs-mode:nil;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
+# vi: set ts=2 noet:
 
 import sys
 import argparse
+import os
 import pandas as pd
 import pyarrow.parquet
 import pyarrow as pa
 from MPLearn import embedding
+
+
+
 from MPLearn.chemoinformatics import chemical_space
 
 DESCRIPTION = """Embed a set of substances in chemical space
@@ -19,17 +25,17 @@ Example:
 
     # generates:
     #   intermediate_data/
-    #      
+    #
 """
 
-def main(args):
+def main(argv):
     parser = argparse.ArgumentParser(description = DESCRIPTION)
 
     parser.add_argument(
         "--library_type",
         type = str,
-        action = store,
-        dest = library_type,
+        action = "store",
+        dest = "library_type",
         default = None,
         help = "Type of library given at library path, options are 'tsv', 'sdf', or None, in which case it is inferred by the file extension")
 
@@ -52,6 +58,13 @@ def main(args):
         default = None,
         help = """Fields from the .sdf library that are stored in the results file (Default: all)""")
     parser.add_argument(
+        "--substance_id_field",
+        type = str,
+        action = "store",
+        dest="substance_id_field",
+        default = "substance_id",
+        help = """If input is .tsv, this is the field name that contains the substance_id""")
+    parser.add_argument(
         "--smiles_field",
         type = str,
         action = "store",
@@ -64,15 +77,23 @@ def main(args):
         action = "store",
         dest = "output_path",
         help = "output path for results")
-        
+
     parser.add_argument(
-	    "--fingerprint_type", type=str, action="store", dest="fingerprint_type", default="ECFP4",
+        "--fingerprint_type", type=str, action="store", dest="fingerprint_type", default="ECFP4",
         help="""Fingerprint type for the query and library compounds over which to compute the tanimoto similarity""")
+    parser.add_argument(
+        "--fingerprint_n_bits",
+        type = int,
+        action = "store",
+        dest = "fingerprint_n_bits",
+        default = 1024,
+        help = """Fingerprint number of bits, defaults to 1024""")
+
     parser.add_argument(
         "--verbose", action="store_true", dest="verbose",
         help="""Give verbose output (Default: False)""")
 
-    arguments = parser.parse_args()
+    arguments = parser.parse_args(argv[1:])
 
     ######################
     # validate arguments #
@@ -82,16 +103,26 @@ def main(args):
     else:
         library_type = arguments.library_type
     if library_type == "tsv":
-        if verbose:
+        if arguments.verbose:
             print("Parsing library as tab-separated value (tsv) table")
     elif library_type == "sdf":
-        if verbose:
+        if arguments.verbose:
             print("Parsing library as a structure data (sdf) file")
     else:
-        print(f"ERROR: Unrecognized library_path extension or specified file type '{library_path}'")
+        print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
         print(f"Recognized extensions are 'tsv' and 'sdf'")
         exit(1)
-                        
+
+    # check that the output path exists
+    if os.path.isdir(arguments.output_path):
+        if arguments.verbose:
+            print(f"Output directory '{arguments.output_path}' already exists.")
+    else:
+        if arguments.verbose:
+            print(f"Creating output directory '{arguments.output_path}' ...")
+        os.mkdir(arguments.output_path)
+
+
     ###################################
     # Get fingerprints for substances #
     ###################################
@@ -104,47 +135,44 @@ def main(args):
             verbose = arguments.verbose)
         substance_info.to_csv(f"{arguments.output_path}/substance_info.tsv", sep="\t")
 
-    elif library_path == "tsv":
+    elif library_type == "tsv":
         substance_data = pd.read_csv(arguments.library_path, sep = "\t")
-        fingerprints = chemical_space.generate_fingerprints(
+
+        if arguments.smiles_field not in substance_data.columns:
+            print(f"ERROR: The field is not in '{arguments.smiles_field}' the library file '{arguments.library_path}'")
+            print(f"Possible smiles columns are [{', '.join([name for name in substance_data.columns])}]")
+            exit(1)
+        if arguments.substance_id_field not in substance_data.columns:
+            print(f"ERROR: The field is not in '{arguments.substance_id_field}' the library file '{arguments.library_path}'")
+            print(f"Possible smiles columns are [{', '.join([name for name in substance_data.columns])}]")
+            exit(1)
+
+        substance_ids, fingerprints = chemical_space.generate_fingerprints_smiles(
             substance_data[arguments.smiles_field],
+            substance_data[arguments.substance_id_field],
             fingerprint_type = arguments.fingerprint_type,
+            fingerprint_n_bits = arguments.fingerprint_n_bits,
             verbose = arguments.verbose)
     else:
-        print(f"ERROR: Unrecognized library_path extension or specified file type '{library_path}'")
+        print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
         print(f"Recognized extensions are 'tsv' and 'sdf'")
         exit(1)
-    
-    if verbose:
-        print(f"Generating embedding for {fingerprints.shape[0]} substances and saving it to '{arguments.output_path} ...")
-
-    chemical_space_embedding = embedding.fit_embedding(
-        dataset = fingerprints,
-        embedding_dir = arguments.output_path)
-
-    if verbose:
-        print(f"Generating a embedding plot of the embedding and saving it at '{arguments.output_path}/embedding.png' ...")
-
-
-    embedding.plot_embedding(
-        embedding = chemical_space_embedding,
-        output_fname = f"{arguments.output_path}/embedding.png",
-        plot_width = 400,
-        plot_height = 400,
-        cmap = fire,
-        background = "white")
 
     ################
     # Save results #
     ################
+    feature_columns = pd.DataFrame({
+        'feature' : [ f"bit_{i}" for i in range(fingerprints.shape[1])],
+        'transform' : ["identity" for i in range(fingerprints.shape[1])]
+    })
+    feature_columns.to_csv(f"{arguments.output_path}/fingerprint_feature_columns.tsv", sep = "\t")
+
+    fingerprints_df = pd.DataFrame(fingerprints, columns = feature_columns['feature'])
+    fingerprints_df.insert(loc=0, column="substance_id", value=substance_ids)
     pa.parquet.write_table(
-        table=fingerprints,
+        table=pa.Table.from_pandas(fingerprints_df),
         where = f"{arguments.output_path}/fingerprints.parquet")
 
 
-
 if __name__ == '__main__':
-   main(
-       argv = sys.argv,
-       output = sys.stdout,
-       log = log)
+   main(argv = sys.argv)

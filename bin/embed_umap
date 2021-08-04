@@ -95,6 +95,9 @@ def main(argv):
         "--umap_init", type=str, action="store", dest="umap_init", default='spectral',
         help="""UMAP initialization. Spectral is preferred, but random is more robust (Default: spectral)""")
     parser.add_argument(
+        "--umap_metric", type=str, action="store", dest="umap_metric", default='cosine',
+        help="""UMAP metric. (Default: cosine)""")
+    parser.add_argument(
         "--umap_low_memory", action="store_true", dest="umap_low_memory", default=False,
         help="""Use UMAP's low-memory NN-lokup, may be slower (Default: False)""")
     parser.add_argument(

@@ -92,11 +92,11 @@ def main(argv):
         "--umap_negative_sample_rate", type=int, action="store", dest="umap_negative_sample_rate", default=5,
         help="""UMAP negative sample rate (Default: 5x)""")
     parser.add_argument(
+        "--umap_metric", type=str, action="store", dest="umap_metric", default='cosine',
+        help="""UMAP Metric. (Default: cosine) """)
+    parser.add_argument(
         "--umap_init", type=str, action="store", dest="umap_init", default='spectral',
         help="""UMAP initialization. Spectral is preferred, but random is more robust (Default: spectral)""")
-    parser.add_argument(
-        "--umap_metric", type=str, action="store", dest="umap_metric", default='cosine',
-        help="""UMAP metric. (Default: cosine)""")
     parser.add_argument(
         "--umap_low_memory", action="store_true", dest="umap_low_memory", default=False,
         help="""Use UMAP's low-memory NN-lokup, may be slower (Default: False)""")
@@ -149,6 +149,9 @@ def main(argv):
             exit(1)
         if arguments.umap_negative_sample_rate != parser.get_default('umap_negative_sample_rate'):
             print("ERROR: setting '--umap_negative_sample_rate' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
+        if arguments.umap_metric != parser.get_default('umap_metric'):
+            print("ERROR: setting '--umap_metric' is incompatible with setting '--ref_embed_dir'")
             exit(1)
         if arguments.umap_init != parser.get_default('umap_init'):
             print("ERROR: setting '--umap_init' is incompatible with setting '--ref_embed_dir'")
@@ -265,6 +268,7 @@ def main(argv):
             umap_a=arguments.umap_a,
             umap_b=arguments.umap_b,
             umap_negative_sample_rate=arguments.umap_negative_sample_rate,
+            umap_metric=arguments.umap_metric,
             umap_n_epochs=arguments.umap_n_epochs,
             low_memory=arguments.umap_low_memory,
             save_transform=arguments.save_transform,

@@ -4,6 +4,7 @@
 import sys
 import argparse
 import os
+import numpy as np
 import pandas as pd
 import pyarrow.parquet
 import pyarrow as pa
@@ -37,14 +38,14 @@ def main(argv):
         action = "store",
         dest = "library_type",
         default = None,
-        help = "Type of library given at library path, options are 'tsv', 'sdf', or None, in which case it is inferred by the file extension")
+        help = "Type of library given at library path, options are ['sdf[.gz]', 'mol2', 'tsv'] or None, in which case it is inferred by the file extension")
 
     parser.add_argument(
         "--library_path",
         type = str,
         action = "store",
         dest = "library_path",
-        help = ".tsv or .sdf of substances sampled from chemical space")
+        help = "'.sdf', '.mol2', or '.tsv' substances sampled from chemical space")
 
     # arguments for .sdf file
     # as a convience extract fields for substances from the sdf file and store
@@ -56,7 +57,7 @@ def main(argv):
         action = "store",
         dest = "library_fields",
         default = None,
-        help = """Fields from the .sdf library that are stored in the results file (Default: all)""")
+        help = """Fields from the .sdf or .mol2 library that are stored in the results file (Default: all)""")
     parser.add_argument(
         "--substance_id_field",
         type = str,
@@ -102,15 +103,28 @@ def main(argv):
         library_type = arguments.library_path.split(".")[-1]
     else:
         library_type = arguments.library_type
+
     if library_type == "tsv":
         if arguments.verbose:
             print("Parsing library as tab-separated value (tsv) table")
     elif library_type == "sdf":
         if arguments.verbose:
             print("Parsing library as a structure data (sdf) file")
+    elif library_type == "mol2":
+        if arguments.verbose:
+            print("Parsing library as a structure data (mol2) file")
+    elif library_type == "gz":
+        library_type = arguments.library_path.split(".")[-2]
+        if library_type == "sdf":
+            if arguments.verbose:
+                print("Parsing library as a structure data (sdf) file")
+        else:
+            print(f"ERROR: Currently .sdf.gz is the only compressed library type that is supported")
+            print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
+            exit(1)
     else:
         print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
-        print(f"Recognized extensions are 'tsv' and 'sdf'")
+        print(f"Recognized extensions are ['sdf', 'sdf.gz', 'mol2', 'tsv']")
         exit(1)
 
     # check that the output path exists
@@ -128,12 +142,22 @@ def main(argv):
     ###################################
 
     if library_type == "sdf":
-        fingerprints, substance_info = chemical_space.generate_fingerprints_sdf(
+        substance_info, fingerprints = chemical_space.generate_fingerprints_sdf(
             library_path = arguments.library_path,
-            library_fields = arguments.library_fields,
+            fields = arguments.library_fields,
             fingerprint_type = arguments.fingerprint_type,
             verbose = arguments.verbose)
         substance_info.to_csv(f"{arguments.output_path}/substance_info.tsv", sep="\t")
+        substance_ids = substance_info[arguments.substance_id_field]
+
+    elif library_type == "mol2":
+        substance_info, fingerprints = chemical_space.generate_fingerprints_mol2(
+            library_path = arguments.library_path,
+            fields = arguments.library_fields,
+            fingerprint_type = arguments.fingerprint_type,
+            verbose = arguments.verbose)
+        substance_info.to_csv(f"{arguments.output_path}/substance_info.tsv", sep="\t")
+        substance_ids = substance_info['_Name']
 
     elif library_type == "tsv":
         substance_data = pd.read_csv(arguments.library_path, sep = "\t")
@@ -155,23 +179,28 @@ def main(argv):
             verbose = arguments.verbose)
     else:
         print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
-        print(f"Recognized extensions are 'tsv' and 'sdf'")
+        print(f"Recognized extensions are ['sdf', 'sdf.gz', 'mol2', 'tsv']")
         exit(1)
 
     ################
     # Save results #
     ################
-    feature_columns = pd.DataFrame({
-        'feature' : [ f"bit_{i}" for i in range(fingerprints.shape[1])],
-        'transform' : ["identity" for i in range(fingerprints.shape[1])]
-    })
-    feature_columns.to_csv(f"{arguments.output_path}/fingerprint_feature_columns.tsv", sep = "\t")
 
-    fingerprints_df = pd.DataFrame(fingerprints, columns = feature_columns['feature'])
-    fingerprints_df.insert(loc=0, column="substance_id", value=substance_ids)
-    pa.parquet.write_table(
-        table=pa.Table.from_pandas(fingerprints_df),
-        where = f"{arguments.output_path}/fingerprints.parquet")
+    if len(fingerprints) > 0:
+        feature_columns = pd.DataFrame({
+            'feature' : [ f"bit_{i}" for i in range(fingerprints.shape[1])],
+            'transform' : ["identity" for i in range(fingerprints.shape[1])]
+        })
+        feature_columns.to_csv(f"{arguments.output_path}/fingerprint_feature_columns.tsv", sep = "\t")
+
+        fingerprints_df = pd.DataFrame(fingerprints, columns = feature_columns['feature'])
+        if substance_ids.dtype == np.dtype('O'):
+            substance_ids = substance_ids.astype(str)
+        fingerprints_df.insert(loc=0, column="substance_id", value=substance_ids)
+        print(f"Writing fingerprints DataFrame to disk '{arguments.output_path}/fingerprints.parquet")
+        pa.parquet.write_table(
+            table=pa.Table.from_pandas(fingerprints_df),
+            where = f"{arguments.output_path}/fingerprints.parquet")
 
 
 if __name__ == '__main__':

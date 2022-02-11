@@ -1,26 +1,67 @@
 # -*- tab-width:4;indent-tabs-mode:nil;show-trailing-whitespace:t;rm-trailing-spaces:t -*-
 # vi: set ts=2 noet:
 
-
+import os
+import gzip
 from typing import Sequence
 import numpy as np
 import pandas as pd
 import tqdm
 import rdkit.Chem
 import rdkit.Chem.rdMolDescriptors
-
+from rdkit.Chem import DataStructs
 
 # for APDP pairs
 from rdkit.Chem.AtomPairs import Pairs
 from rdkit.Chem.AtomPairs import Sheridan
 from rdkit import DataStructs
 
+from .rdkit_support import Mol2MolSupplier
+
+
+
+def molecule_to_fingerprint_array(
+    molecule,
+    fingerprint_type,
+    fingerprint_n_bits,
+    verbose = False):
+    """
+    Conver rdkit molecule to numpy.array
+
+    """
+
+    if fingerprint_type == "ECFP4":
+        fingerprint = np.zeros(fingerprint_n_bits, np.uint8)
+        DataStructs.ConvertToNumpyArray(
+            rdkit.Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(
+                mol=molecule, radius=2, nBits=fingerprint_n_bits),
+            fingerprint)
+
+    elif fingerprint_type == "APDP":
+        ap_fp = Pairs.GetAtomPairFingerprint(molecule)
+        dp_fp = Sheridan.GetBPFingerprint(molecule)
+        #ap_fp.GetLength() == 8388608
+        #dp_fp.GetLength() == 8388608
+        #16777216 = 8388608 + 8388608
+
+        fingerprint = np.zeros(fingerprint_n_bits)
+        for i in ap_fp.GetNonzeroElements().keys():
+            fingerprint[i % fingerprint_n_bits] = 1
+        for i in dp_fp.GetNonzeroElements().keys():
+            fingerprint[(i + 8388608) % fingerprint_n_bits] = 1
+    else:
+        raise ValueError(f"ERROR: Unrecognized fingerprint type '{fingerprint_type}'")
+        exit(1)
+
+    return fingerprint
+
+
 def generate_fingerprints_smiles(
-        smiles: Sequence[str],
-        substance_ids: Sequence[str],
-        fingerprint_type: str = 'ECFP4',
-        fingerprint_n_bits = 1024,
-        verbose = False):
+    smiles: Sequence[str],
+    substance_ids: Sequence[str],
+    fingerprint_type: str = 'ECFP4',
+    fingerprint_n_bits = 1024,
+    verbose = False):
     """
     Generate fingerprints for a set of molecules
 
@@ -68,32 +109,15 @@ def generate_fingerprints_smiles(
                 f"with smiles '{smiles}'."))
             continue
 
-        if fingerprint_type == "ECFP4":
-            try:
-                fingerprint = rdkit.Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(
-                    mol=molecule, radius=2, nBits=fingerprint_n_bits)
-
-            except:
-                print(f"WARNING: Unable to generate fingerprint for library molecule with index {index}")
-                continue
-            fingerprints.append(fingerprint)
-            substance_ids_generated.append(substance_ids[index])
-
-        elif fingerprint_type == "APDP":
-            ap_fp = Pairs.GetAtomPairFingerprint(molecule)
-            dp_fp = Sheridan.GetBPFingerprint(molecule)
-            #ap_fp.GetLength() == 8388608
-            #dp_fp.GetLength() == 8388608
-            #16777216 = 8388608 + 8388608
-
-            fingerprint = np.zeros(fingerprint_n_bits)
-            for i in ap_fp.GetNonzeroElements().keys():
-                fingerprint[i % fingerprint_n_bits] = 1
-            for i in dp_fp.GetNonzeroElements().keys():
-                fingerprint[(i + 8388608) % fingerprint_n_bits] = 1
-        else:
-            print(f"ERROR: Unrecognized fingerprint type '{fingerprint_type}'")
-            exit(1)
+        try:
+            fingerprint = molecule_to_fingerprint_array(
+                fingerprint,
+                fingerprint_type,
+                fingerprint_n_bits,
+                verbose)
+        except:
+            print(f"WARNING: Unable to generate fingerprint for library molecule with index {index}")
+            continue
 
         fingerprints.append(fingerprint)
         substance_ids_generated.append(substance_ids[index])
@@ -101,19 +125,21 @@ def generate_fingerprints_smiles(
     fingerprints = np.array(fingerprints)
     return substance_ids_generated, fingerprints
 
+
 # needs some debugging
 def generate_fingerprints_sdf(
         library_path: str,
-        library_fields: Sequence[str],
+        fields: Sequence[str],
         fingerprint_type: str = 'ECFP4',
+        fingerprint_n_bits: int = 1024,
         verbose=False):
 
     """
     Generate fingerprints for substances in the library
 
     Args:
-        libray: path to library .sdf file
-        library_fields: fields in the library .sdf file to be reported in the results
+        libray_path: path to a possibly gzipped library .sdf file
+        fields: fields in the library .sdf file to be reported in the results
         fingerprint_type: type of fingerprint to represent molecules for comparison
 
     Returns:
@@ -124,7 +150,7 @@ def generate_fingerprints_sdf(
     if not os.path.exists(library_path):
         raise ValueError(f"The library path '{library_path}' does not exist.")
 
-    valid_fingerprint_types = ['ECFP4']
+    valid_fingerprint_types = ['ECFP4', 'APDP']
     if fingerprint_type not in valid_fingerprint_types:
         raise ValueError((
             f"Unrecognized fingerprint_type '{fingerprint_type}'. ",
@@ -132,35 +158,108 @@ def generate_fingerprints_sdf(
 
     substances = []
     fingerprints = []
-    for library_substance_index, library_substance in enumerate(rdkit.Chem.SDMolSupplier(library_path)):
-        if fingerprint_type == "ECFP4":
-            try:
-                library_fingerprint = rdkit.Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(
-                    mol=library_substance, radius=2, nBits=1024)
-            except:
-                print(f"WARNING: Unable to generate fingerprint for library molecule with index {library_substance_index}")
-                continue
+    if library_path.endswith(".gz"):
+        supplier = rdkit.Chem.ForwardSDMolSupplier(gzip.open(library_path))
+    else:
+        supplier = rdkit.Chem.ForwardSDMolSupplier(library_path)
 
+    for substance_index, substance in enumerate(supplier):
+        try:
+            fingerprint = molecule_to_fingerprint_array(
+                substance,
+                fingerprint_type,
+                fingerprint_n_bits,
+                verbose)
+        except:
+            print(f"WARNING: Unable to generate fingerprint for library molecule with index {substance_index}")
+            continue
+        fingerprints.append(fingerprint)
 
         substance_info = {}
-        if library_fields is None:
-            substance_info.update(library_substance.GetPropsAsDict())
+        if fields is None:
+            substance_info.update(substance.GetPropsAsDict())
         else:
-            for library_field in library_fields:
+            for field in fields:
                 try:
-                    library_field_value = library_substance.GetProp(library_field)
-                    substance_info[library_field] = library_field_value
+                    field_value = substance.GetProp(field)
+                    substance_info[field] = field_value
                 except:
                     print(
-                        f"WARNING: Library compound at index {library_substance_index} does not have field {library_field}.")
-                    substance_info[library_field] = None
-        substance_info["fingerprint"] = library_fingerprint
-        substance_info.append(result)
+                        f"WARNING: Library compound at index {substance_index} does not have field {field}.")
+                    substance_info[field] = None
+        substances.append(substance_info)
 
     if verbose:
-        print(f"Found library contains {len(results)} substances.")
+        print(f"Found library contains {len(substances)} substances.")
 
-    fingerprint = np.stack(fingerprints)
+    fingerprints = np.array(fingerprints)
     substances = pd.DataFrame(substances)
 
-    return fingerprints, substances
+    return substances, fingerprints
+
+
+# needs some debugging
+def generate_fingerprints_mol2(
+        library_path: str,
+        fields: Sequence[str] = ["_Name"],
+        fingerprint_type: str = 'ECFP4',
+        fingerprint_n_bits: int = 1024,
+        verbose=False):
+
+    """
+    Generate fingerprints for substances in the library
+
+    Args:
+        libray_path: path to library .mol2 file
+        fields: fields in the library .mol2 file to be reported in the results
+        fingerprint_type: type of fingerprint to represent molecules for comparison
+
+    Returns:
+        List[Dict[query_id:str, <library_fields>, tanimoto_similarity:float]]
+    """
+
+    # validate inputs
+    if not os.path.exists(library_path):
+        raise ValueError(f"The library path '{library_path}' does not exist.")
+
+    valid_fingerprint_types = ["ECFP4", "APDP"]
+    if fingerprint_type not in valid_fingerprint_types:
+        raise ValueError((
+            f"Unrecognized fingerprint_type '{fingerprint_type}'. ",
+            f"Valid options are [{', '.join(valid_fingerprint_types)}]"))
+
+    substances = []
+    fingerprints = []
+    for substance_index, (start_line, substance) in enumerate(Mol2MolSupplier(library_path)):
+        try:
+            fingerprint = molecule_to_fingerprint_array(
+                substance,
+                fingerprint_type,
+                fingerprint_n_bits,
+                verbose)
+        except:
+            print(f"WARNING: Unable to generate fingerprint for library molecule with index {substance_index}")
+            continue
+        fingerprints.append(fingerprint)
+
+        substance_info = {}
+        if fields is None:
+            substance_info.update(substance.GetPropsAsDict())
+        else:
+            for field in fields:
+                try:
+                    field_value = substance.GetProp(field)
+                    substance_info[field] = field_value
+                except:
+                    print(
+                        f"WARNING: Library compound at index {substance_index} does not have field {field}.")
+                    substance_info[field] = None
+        substances.append(substance_info)
+
+    if verbose:
+        print(f"Found library contains {len(substances)} substances.")
+
+    fingerprints = np.array(fingerprints)
+    substances = pd.DataFrame(substances)
+
+    return substances, fingerprints

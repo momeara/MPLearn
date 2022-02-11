@@ -22,9 +22,10 @@ install_system_prereqs:
 
 install_prereqs:
 	# data tools
-	conda install setuptools pandas joblib scikit-learn nodejs
+	conda install setuptools pandas joblib nodejs
 
 	# data io
+	conda install -c conda-forge scikit-learn
 	conda install -c conda-forge pyarrow
 	conda install -c conda-forge h5py
 	conda install -c conda-forge boto3

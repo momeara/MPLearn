@@ -150,6 +150,9 @@ def main(argv):
         if arguments.umap_negative_sample_rate != parser.get_default('umap_negative_sample_rate'):
             print("ERROR: setting '--umap_negative_sample_rate' is incompatible with setting '--ref_embed_dir'")
             exit(1)
+        if arguments.umap_metric != parser.get_default('umap_metric'):
+            print("ERROR: setting '--umap_metric' is incompatible with setting '--ref_embed_dir'")
+            exit(1)
         if arguments.umap_init != parser.get_default('umap_init'):
             print("ERROR: setting '--umap_init' is incompatible with setting '--ref_embed_dir'")
             exit(1)
@@ -271,7 +274,6 @@ def main(argv):
             save_transform = arguments.save_transform,
             seed = arguments.seed,
             verbose = arguments.verbose)
-
 
         if arguments.compute_hdbscan_clusters:
             if arguments.verbose:

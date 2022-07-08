@@ -39,7 +39,9 @@ flycheck_*
 *.pkl
 *.parquet
 
+# temporary files
 Rplots.pdf
+geckodriver.log
 
 vignettes/*/*/product/*
 vignettes/*/*/intermediate_data/*

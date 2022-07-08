@@ -178,6 +178,7 @@ def save_embedding_plot(
         background_color="",
         plot_width=400,
         plot_height=400):
+
     canvas = datashader.Canvas(
         plot_width=plot_width,
         plot_height=plot_height).points(embedding, 'UMAP_1', 'UMAP_2')
@@ -217,12 +218,13 @@ def view_UMAP_clusters(
     map = dynspread(map, threshold=.4)
     map = map.options(bgcolor='black')
 
-    # overlay the sampled points for the tool tips
-    points = holoviews.Points(embedding, ['UMAP_1', 'UMAP_2'], label=label)
-    hover_points = decimate(points)
-    hover_points.opts(tools=['hover'], alpha=0)
-
     if cluster_labels:
+        # overlay the sampled points for the tool tips
+        points = holoviews.Points(embedding, ['UMAP_1', 'UMAP_2'], label=label)
+
+        hover_points = decimate(points)
+        hover_points.opts(tools=['hover'], alpha=0)
+
         label_coords = []
         label_text = []
         for cluster_label in embedding['cluster_label'].unique():
@@ -239,7 +241,7 @@ def view_UMAP_clusters(
                     text_color=cluster_label_color))
         return (map * labels_layer *  hover_points)
     else:
-        return (map * labels_layer)
+        return map
 
 
 def view_UMAP_ROIs(
@@ -289,7 +291,8 @@ def view_UMAP_select_condition(
         embedding,
         condition,
         default_value=None,
-        label=''):
+        label='',
+        verbose = False):
     """
     In a notebook, plot an embedding and dynamically be able to select a subset of data to show
 
@@ -317,9 +320,13 @@ def view_UMAP_select_condition(
             f"ERROR: condition {condition} is not a column in the embedding dataframe:",
             f"{embedding.columns}")
 
-    condition_values = embedding[condition].unique()
+    condition_values = embedding[condition].unique().tolist()
+    if verbose:
+        print(f"Found {len(condition_values)} values for condition={condition}")
 
     if default_value is None:
+        if verbose:
+            print(f"setting default value to {condition_values[0]}")
         default_value = condition_values[0]
 
     class EmbedPlot(param.Parameterized):

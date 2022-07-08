@@ -46,6 +46,8 @@ install_prereqs:
 	conda install -c conda-forge datashader
 	conda install -c conda-forge shapely
 	conda install -c bokeh selenium
+	conda install -c conda-forge firefox geckodriver
+	# install geckodrive from e.g. from https://github.com/mozilla/geckodriver/releases/download/v0.31.0/geckodriver-v0.31.0-linux64.tar.gz
 	conda install phantomjs
 	pip install nbstripout nbconvert
 

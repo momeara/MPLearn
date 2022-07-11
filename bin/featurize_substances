@@ -91,6 +91,14 @@ def main(argv):
         help = """Fingerprint number of bits, defaults to 1024""")
 
     parser.add_argument(
+        "--device",
+        type = str,
+        action = "store",
+        dest = "device",
+        default = "cpu",
+        help = """Hardware device e.g. 'cpu', 'gpu:1', etc. DEFAULT: cup""")
+
+    parser.add_argument(
         "--verbose", action="store_true", dest="verbose",
         help="""Give verbose output (Default: False)""")
 
@@ -176,6 +184,7 @@ def main(argv):
             substance_data[arguments.substance_id_field],
             fingerprint_type = arguments.fingerprint_type,
             fingerprint_n_bits = arguments.fingerprint_n_bits,
+            device = arguments.device,
             verbose = arguments.verbose)
     else:
         print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
@@ -194,7 +203,7 @@ def main(argv):
         feature_columns.to_csv(f"{arguments.output_path}/fingerprint_feature_columns.tsv", sep = "\t")
 
         fingerprints_df = pd.DataFrame(fingerprints, columns = feature_columns['feature'])
-        if substance_ids.dtype == np.dtype('O'):
+        if type(substance_ids) == np.ndarray and substance_ids.dtype == np.dtype('O'):
             substance_ids = substance_ids.astype(str)
         fingerprints_df.insert(loc=0, column="substance_id", value=substance_ids)
         print(f"Writing fingerprints DataFrame to disk '{arguments.output_path}/fingerprints.parquet")

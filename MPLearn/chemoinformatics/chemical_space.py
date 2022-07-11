@@ -19,6 +19,30 @@ from rdkit import DataStructs
 from .rdkit_support import Mol2MolSupplier
 
 
+def download_huggingface_model(
+    model_name,
+    model_path,
+    verbose = False):
+    """
+    Download and store Hugging Face model and tokenizer
+    """
+
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    if verbose:
+        print(f"Loading Hugging Face model '{model_name}'...")
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+
+    if not os.exists(model_path):
+        if verbose:
+            print(f"Output model path '{model_path}/{{model,tokenizer}}' does not exist, creating...")
+        os.create(model_path)
+
+    model.save_pretrained(
+        f"{model_path}/model")
+    tokenizer.save_pretrained(
+        f"{model_path}/tokenizer")
+
 
 def molecule_to_fingerprint_array(
     molecule,
@@ -60,8 +84,9 @@ def generate_fingerprints_smiles(
     smiles: Sequence[str],
     substance_ids: Sequence[str],
     fingerprint_type: str = 'ECFP4',
-    fingerprint_n_bits = 1024,
-    verbose = False):
+    fingerprint_n_bits: int = 1024,
+    device: str = 'cpu',
+    verbose: bool = False):
     """
     Generate fingerprints for a set of molecules
 
@@ -69,12 +94,15 @@ def generate_fingerprints_smiles(
         smiles: a list of smiles strings
         fingerprint_type: type of fingerprint to represent molecules for comparison
         fingerprint_n_bits: number of bits in the returned fingerprint
+        device: specify hardware accelerator for models that support it
+        model_path: for trained models, specify the model where to load the model
+        verbose: verbose logging
 
     Returns:
         List[Dict[query_id:str, <library_fields>, tanimoto_similarity:float]]
     """
-    valid_fingerprint_types = ['ECFP4', 'APDP']
-    if fingerprint_type not in valid_fingerprint_types:
+    valid_fingerprint_types = ('ECFP4', 'APDP', "huggingface")
+    if not fingerprint_type.startswith(valid_fingerprint_types):
         raise ValueError((
             f"Unrecognized fingerprint_type '{fingerprint_type}'. ",
             f"Valid options are [{', '.join(valid_fingerprint_types)}]"))
@@ -82,42 +110,82 @@ def generate_fingerprints_smiles(
     if isinstance(smiles, str):
         smiles = [smiles]
 
+    if fingerprint_type.startswith("huggingface"):
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        import selfies
+        import torch
+        model_path = fingerprint_type[12:]
+
+        if verbose:
+            print(f"Loading huggingface model '{model_path}' onto device '{device}'...")
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(model_path).to(device)
+
     fingerprints = []
     substance_ids_generated = []
     for index, substance_smiles in enumerate(tqdm.tqdm(smiles)):
-        try:
-            molecule = rdkit.Chem.MolFromSmiles(substance_smiles, sanitize=False)
-        except:
-            print((
-                f"WARNING: RDKit failed to create molecule '{index}' ",
-                f"with smiles '{substance_smiles}'; skipping..."))
-            continue
 
-        if molecule is None:
-            print((
-                f"WARNING: RDKit failed to create molecule '{index}' ",
-                f"with smiles '{substance_smiles}'; skipping..."))
-            continue
+        if fingerprint_type.startswith("huggingface"):
+            try:
+                substance_selfies = selfies.encoder(substance_smiles)
+            except:
+                print((
+                    f"ERROR: Failed to generate selfies for molecule '{index}' ",
+                    f"using fingerprint type '{fingerprint_type}' ",
+                    f"with smiles '{substance_smiles}'; skipping..."))
+                continue
 
-        try:
-            molecule.UpdatePropertyCache(strict=False)
-            molecule = rdkit.Chem.AddHs(molecule, addCoords=True)
-            molecule = rdkit.Chem.RemoveHs(molecule) # Also Sanitizes
-        except ValueError as e:
-            print((
-                f"WARNING: {str(e)}. Skipping molecule '{index}' ",
-                f"with smiles '{smiles}'."))
-            continue
+            try:
+                with torch.no_grad():
+                    substance_tokens = tokenizer(substance_selfies)
+                    input_ids = torch.tensor(substance_tokens.input_ids).to(device)
+                    model_output = model.forward(input_ids = input_ids)
+                    fingerprint = list(model_output.values())[0].mean(0)
+                    fingerprint = fingerprint.cpu().detach().numpy()
+            except:
+                print((
+                    f"ERROR: Failed to generate fingerprint for molecule '{index}' ",
+                    f"using fingerprint type '{fingerprint_type}' ",
+                    f"with smiles '{substance_smiles}'; skipping "))
+                continue
 
-        try:
-            fingerprint = molecule_to_fingerprint_array(
-                fingerprint,
-                fingerprint_type,
-                fingerprint_n_bits,
-                verbose)
-        except:
-            print(f"WARNING: Unable to generate fingerprint for library molecule with index {index}")
-            continue
+        elif fingerprint_type in ["ECFP4", "APDP"]:
+            try:
+                molecule = rdkit.Chem.MolFromSmiles(substance_smiles, sanitize=False)
+            except:
+                print((
+                    f"ERROR: RDKit failed to create molecule '{index}' ",
+                    f"using fingerprint type '{fingerprint_type}' ",
+                    f"with smiles '{substance_smiles}'; skipping..."))
+                continue
+
+            if molecule is None:
+                print((
+                    f"WARNING: RDKit failed to create molecule '{index}' ",
+                    f"using fingerprint type '{fingerprint_type}' ",
+                    f"with smiles '{substance_smiles}'; skipping..."))
+                continue
+
+            try:
+                molecule.UpdatePropertyCache(strict=False)
+                molecule = rdkit.Chem.AddHs(molecule, addCoords=True)
+                molecule = rdkit.Chem.RemoveHs(molecule) # Also Sanitizes
+            except ValueError as e:
+                print((
+                    f"ERROR: {str(e)}. Skipping molecule '{index}' ",
+                    f"using fingerprint type '{fingerprint_type}' ",
+                    f"with smiles '{smiles}'."))
+                continue
+
+            try:
+                fingerprint = molecule_to_fingerprint_array(
+                    molecule,
+                    fingerprint_type,
+                    fingerprint_n_bits,
+                    verbose)
+            except:
+                print(f"ERROR: Unable to generate fingerprint for library molecule with index {index}")
+                continue
 
         fingerprints.append(fingerprint)
         substance_ids_generated.append(substance_ids[index])

@@ -174,8 +174,6 @@ def main(argv):
     ################
     if arguments.feature_columns is not None:
         feature_columns = pd.read_csv(arguments.feature_columns, sep="\t")
-        if arguments.verbose:
-            print("Loading '{}' feature columns".format(feature_columns.shape[0]))
     else:
         feature_columns = None
 

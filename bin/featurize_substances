@@ -63,8 +63,10 @@ def main(argv):
         type = str,
         action = "store",
         dest="substance_id_field",
-        default = "substance_id",
-        help = """If input is .tsv, this is the field name that contains the substance_id""")
+        default = None,
+        help = """The field for the substance identifier
+  * If input is .tsv, this is the field name that contains the substance_id
+  * If input is .mol2 or .sdf default to the substance name""")
     parser.add_argument(
         "--smiles_field",
         type = str,
@@ -150,19 +152,49 @@ def main(argv):
     ###################################
 
     if library_type == "sdf":
+        if arguments.library_fields is None:
+            library_fields = ['_Name']
+        else:
+            library_fields = arguments.library_fields
+
+        if arguments.substance_id_field is None:
+            substance_id_field = '_Name'
+        else:
+            substance_id_field = arguments_id_field
+
+        if substance_id_field not in library_fields:
+            print(f"ERROR: substance_id_field {substance_id_field} is not in the library_fields [{', '.join(library_fields)}].")
+            exit(1)
+
         substance_info, fingerprints = chemical_space.generate_fingerprints_sdf(
             library_path = arguments.library_path,
-            fields = arguments.library_fields,
+            fields = library_fields,
             fingerprint_type = arguments.fingerprint_type,
+            device = arguments.device,
             verbose = arguments.verbose)
         substance_info.to_csv(f"{arguments.output_path}/substance_info.tsv", sep="\t")
-        substance_ids = substance_info[arguments.substance_id_field]
+        substance_ids = substance_info[substance_id_field]
 
     elif library_type == "mol2":
+        if arguments.library_fields is None:
+            library_fields = ['_Name']
+        else:
+            library_fields = arguments.library_fields
+
+        if arguments.substance_id_field is None:
+            substance_id_field = '_Name'
+        else:
+            substance_id_field = arguments_id_field
+
+        if substance_id_field not in library_fields:
+            print(f"ERROR: substance_id_field {substance_id_field} is not in the library_fields [{', '.join(library_fields)}].")
+            exit(1)
+
         substance_info, fingerprints = chemical_space.generate_fingerprints_mol2(
             library_path = arguments.library_path,
             fields = arguments.library_fields,
             fingerprint_type = arguments.fingerprint_type,
+            device = arguments.device,
             verbose = arguments.verbose)
         substance_info.to_csv(f"{arguments.output_path}/substance_info.tsv", sep="\t")
         substance_ids = substance_info['_Name']
@@ -172,11 +204,11 @@ def main(argv):
 
         if arguments.smiles_field not in substance_data.columns:
             print(f"ERROR: The field is not in '{arguments.smiles_field}' the library file '{arguments.library_path}'")
-            print(f"Possible smiles columns are [{', '.join([name for name in substance_data.columns])}]")
+            print(f"ERROR: Possible smiles columns are [{', '.join([name for name in substance_data.columns])}]")
             exit(1)
         if arguments.substance_id_field not in substance_data.columns:
             print(f"ERROR: The field is not in '{arguments.substance_id_field}' the library file '{arguments.library_path}'")
-            print(f"Possible smiles columns are [{', '.join([name for name in substance_data.columns])}]")
+            print(f"ERROR: Possible smiles columns are [{', '.join([name for name in substance_data.columns])}]")
             exit(1)
 
         substance_ids, fingerprints = chemical_space.generate_fingerprints_smiles(
@@ -188,7 +220,7 @@ def main(argv):
             verbose = arguments.verbose)
     else:
         print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
-        print(f"Recognized extensions are ['sdf', 'sdf.gz', 'mol2', 'tsv']")
+        print(f"ERROR: Recognized extensions are ['sdf', 'sdf.gz', 'mol2', 'tsv']")
         exit(1)
 
     ################
@@ -210,6 +242,26 @@ def main(argv):
         pa.parquet.write_table(
             table=pa.Table.from_pandas(fingerprints_df),
             where = f"{arguments.output_path}/fingerprints.parquet")
+
+        with open(f"{arguments.output_path}/fingerprints_info.tsv", 'w') as f:
+            f.write("key\tvalue\n")
+            f.write(f"library_type\n{arguments.library_type}\n")
+            f.write(f"library_path\n{arguments.library_path}\n")
+            if library_type in ["sdf", "mol2"]:
+                f.write(f"library_fields\n{';'.join(arugments.library_fields)}\n")
+            elif library_type == "tsv":
+                f.write(f"substancce_id_field\t{arguments.substance_id_field}\n")
+                f.write(f"smiles_field\t{arguments.smiles_field}\n")
+            f.write(f"fingerprint_type\t{arguments.fingerprint_type}\n")
+            if fingerprint_type == "ECFP4":
+                f.write(f"fingerprint_n_bits\t{arguments.fingerprint_n_bits}\n")
+            elif fingerprint_type.startswith("huggingface"):
+                f.write(f"device\t{arguments.device}\n")
+            f.write(f"n_substances\n{len(fingerprints)}\n")
+
+    else:
+        if verbose:
+            print("WARNING: No fingeprints were generated.")
 
 
 if __name__ == '__main__':

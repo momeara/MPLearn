@@ -38,14 +38,14 @@ def main(argv):
         action = "store",
         dest = "library_type",
         default = None,
-        help = "Type of library given at library path, options are ['sdf[.gz]', 'mol2', 'tsv'] or None, in which case it is inferred by the file extension")
+        help = "Type of library given at library path, options are ['sdf[.gz]', 'mol2', 'tsv', 'csv', 'smi'] or None, in which case it is inferred by the file extension")
 
     parser.add_argument(
         "--library_path",
         type = str,
         action = "store",
         dest = "library_path",
-        help = "'.sdf', '.mol2', or '.tsv' substances sampled from chemical space")
+        help = "'.sdf[.gz]', '.mol2', '.tsv', '.csv', or '.smi' substances sampled from chemical space")
 
     # arguments for .sdf file
     # as a convience extract fields for substances from the sdf file and store
@@ -64,14 +64,14 @@ def main(argv):
         action = "store",
         dest="substance_id_field",
         default = "substance_id",
-        help = """If input is .tsv, this is the field name that contains the substance_id""")
+        help = """If input is .tsv or .csv this is the field name that contains the substance_id""")
     parser.add_argument(
         "--smiles_field",
         type = str,
         action = "store",
         dest="smiles_field",
         default = "smiles",
-        help = """If input is .tsv, this is the field name that contains the smiles""")
+        help = """If input is .tsv or .csv this is the field name that contains the smiles""")
     parser.add_argument(
         "--output_path",
         type = str,
@@ -112,15 +112,21 @@ def main(argv):
     else:
         library_type = arguments.library_type
 
-    if library_type == "tsv":
-        if arguments.verbose:
-            print("Parsing library as tab-separated value (tsv) table")
-    elif library_type == "sdf":
+    if library_type == "sdf":
         if arguments.verbose:
             print("Parsing library as a structure data (sdf) file")
     elif library_type == "mol2":
         if arguments.verbose:
             print("Parsing library as a structure data (mol2) file")
+    elif library_type == "tsv":
+        if arguments.verbose:
+            print("Parsing library as tab-separated value (tsv) table")
+    elif library_type == "csv":
+        if arguments.verbose:
+            print("Parsing library as comma-separated value (csv) table")
+    elif library_type == "smi":
+        if arguments.verbose:
+            print("Parsing library as .smi file")
     elif library_type == "gz":
         library_type = arguments.library_path.split(".")[-2]
         if library_type == "sdf":
@@ -132,7 +138,7 @@ def main(argv):
             exit(1)
     else:
         print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
-        print(f"Recognized extensions are ['sdf', 'sdf.gz', 'mol2', 'tsv']")
+        print(f"Recognized extensions are ['sdf', 'sdf.gz', 'mol2', 'tsv', 'csv', 'smi']")
         exit(1)
 
     # check that the output path exists
@@ -176,19 +182,53 @@ def main(argv):
             exit(1)
         if arguments.substance_id_field not in substance_data.columns:
             print(f"ERROR: The field is not in '{arguments.substance_id_field}' the library file '{arguments.library_path}'")
-            print(f"Possible smiles columns are [{', '.join([name for name in substance_data.columns])}]")
+            print(f"Possible substance_id columns are [{', '.join([name for name in substance_data.columns])}]")
             exit(1)
 
         substance_ids, fingerprints = chemical_space.generate_fingerprints_smiles(
-            substance_data[arguments.smiles_field],
-            substance_data[arguments.substance_id_field],
+            smiles = substance_data[arguments.smiles_field],
+            substance_ids = substance_data[arguments.substance_id_field],
             fingerprint_type = arguments.fingerprint_type,
             fingerprint_n_bits = arguments.fingerprint_n_bits,
             device = arguments.device,
             verbose = arguments.verbose)
+
+    elif library_type == "csv":
+        substance_data = pd.read_csv(arguments.library_path, sep = ",")
+
+        if arguments.smiles_field not in substance_data.columns:
+            print(f"ERROR: The field is not in '{arguments.smiles_field}' the library file '{arguments.library_path}'")
+            print(f"Possible smiles columns are [{', '.join([name for name in substance_data.columns])}]")
+            exit(1)
+        if arguments.substance_id_field not in substance_data.columns:
+            print(f"ERROR: The field is not in '{arguments.substance_id_field}' the library file '{arguments.library_path}'")
+            print(f"Possible smiles columns are [{', '.join([name for name in substance_data.columns])}]")
+            exit(1)
+
+        substance_ids, fingerprints = chemical_space.generate_fingerprints_smiles(
+            smiles = substance_data[arguments.smiles_field],
+            substance_ids = substance_data[arguments.substance_id_field],
+            fingerprint_type = arguments.fingerprint_type,
+            fingerprint_n_bits = arguments.fingerprint_n_bits,
+            device = arguments.device,
+            verbose = arguments.verbose)
+
+    elif library_type == "smi":
+        substance_data = pd.read_csv(
+            arguments.library_path,
+            sep = " ",
+            names = ["smiles", "substance_id"])
+        substance_ids, fingerprints = chemical_space.generate_fingerprints_smiles(
+            smiles = substance_data["smiles"],
+            substance_ids = substance_data["substance_id"],
+            fingerprint_type = arguments.fingerprint_type,
+            fingerprint_n_bits = arguments.fingerprint_n_bits,
+            device = arguments.device,
+            verbose = arguments.verbose)
+
     else:
         print(f"ERROR: Unrecognized library_path extension or specified file type '{arguments.library_path}'")
-        print(f"Recognized extensions are ['sdf', 'sdf.gz', 'mol2', 'tsv']")
+        print(f"Recognized extensions are ['sdf', 'sdf.gz', 'mol2', 'tsv', 'csv', 'smi']")
         exit(1)
 
     ################

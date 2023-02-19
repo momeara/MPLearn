@@ -7,8 +7,6 @@ import math
 import PIL
 import PIL.ImageDraw
 import PIL.ImageOps
-import boto3
-import mysql.connector
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
@@ -172,6 +170,10 @@ def retrieve_image_from_S3(
         S3_bucket,
         S3_key,
         verbose):
+	
+	
+    import boto3
+
     """
     Retrieve an image from S3://<bucket>.S3.[<region>.]amazonaws.com/<S3_key>
     and load using PIL Image library
@@ -283,6 +285,10 @@ def view_cells(
         width,
         height,
         verbose=False):
+	
+	
+    import mysql.connector
+
     """
     Retrieve images and make them easy to see what what's going
 

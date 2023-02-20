@@ -18,32 +18,6 @@ from rdkit import DataStructs
 
 from .rdkit_support import Mol2MolSupplier
 
-
-def download_huggingface_model(
-    model_name,
-    model_path,
-    verbose = False):
-    """
-    Download and store Hugging Face model and tokenizer
-    """
-
-    from transformers import AutoTokenizer, AutoModelForCausalLM
-    if verbose:
-        print(f"Loading Hugging Face model '{model_name}'...")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name)
-
-    if not os.exists(model_path):
-        if verbose:
-            print(f"Output model path '{model_path}/{{model,tokenizer}}' does not exist, creating...")
-        os.create(model_path)
-
-    model.save_pretrained(
-        f"{model_path}/model")
-    tokenizer.save_pretrained(
-        f"{model_path}/tokenizer")
-
-
 def molecule_to_fingerprint_array(
     molecule,
     fingerprint_type,
@@ -95,7 +69,6 @@ def generate_fingerprints_smiles(
         fingerprint_type: type of fingerprint to represent molecules for comparison
         fingerprint_n_bits: number of bits in the returned fingerprint
         device: specify hardware accelerator for models that support it
-        model_path: for trained models, specify the model where to load the model
         verbose: verbose logging
 
     Returns:
@@ -186,6 +159,8 @@ def generate_fingerprints_smiles(
             except:
                 print(f"ERROR: Unable to generate fingerprint for library molecule with index {index}")
                 continue
+        else:
+            print(f"ERROR: Unrecognized fingerprint_type {fingerprint_type}")
 
         fingerprints.append(fingerprint)
         substance_ids_generated.append(substance_ids[index])
@@ -200,7 +175,8 @@ def generate_fingerprints_sdf(
         fields: Sequence[str],
         fingerprint_type: str = 'ECFP4',
         fingerprint_n_bits: int = 1024,
-        verbose=False):
+        device: str = 'cpu',
+        verbose: bool = False):
 
     """
     Generate fingerprints for substances in the library
@@ -209,6 +185,8 @@ def generate_fingerprints_sdf(
         libray_path: path to a possibly gzipped library .sdf file
         fields: fields in the library .sdf file to be reported in the results
         fingerprint_type: type of fingerprint to represent molecules for comparison
+        device: specify hardware accelerator for models that support it
+        verbose: verbose logging
 
     Returns:
         List[Dict[query_id:str, <library_fields>, tanimoto_similarity:float]]
@@ -218,11 +196,22 @@ def generate_fingerprints_sdf(
     if not os.path.exists(library_path):
         raise ValueError(f"The library path '{library_path}' does not exist.")
 
-    valid_fingerprint_types = ['ECFP4', 'APDP']
-    if fingerprint_type not in valid_fingerprint_types:
+    valid_fingerprint_types = ('ECFP4', 'APDP', 'huggingface')
+    if not fingerprint_type.startswith(valid_fingerprint_types):
         raise ValueError((
             f"Unrecognized fingerprint_type '{fingerprint_type}'. ",
             f"Valid options are [{', '.join(valid_fingerprint_types)}]"))
+
+    if fingerprint_type.startswith("huggingface"):
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        import selfies
+        import torch
+        model_path = fingerprint_type[12:]
+
+        if verbose:
+            print(f"Loading huggingface model '{model_path}' onto device '{device}'...")
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(model_path).to(device)
 
     substances = []
     fingerprints = []
@@ -231,16 +220,50 @@ def generate_fingerprints_sdf(
     else:
         supplier = rdkit.Chem.ForwardSDMolSupplier(library_path)
 
-    for substance_index, substance in enumerate(supplier):
-        try:
-            fingerprint = molecule_to_fingerprint_array(
-                substance,
-                fingerprint_type,
-                fingerprint_n_bits,
-                verbose)
-        except:
-            print(f"WARNING: Unable to generate fingerprint for library molecule with index {substance_index}")
-            continue
+    for substance_index, substance in enumerate(tqdm.tqdm(supplier)):
+        if fingerprint_type.startswith("huggingface"):
+            try:
+                substance_smiles = rdkit.Chem.MolToSmiles(substance)
+            except:
+                print((
+                    f"ERROR: Failed to generate smiles for molecule '{substance_index}' ",
+                    f"using fingerprint type '{fingerprint_type}' ",
+                    f"skipping..."))
+                continue
+
+            try:
+                substance_selfies = selfies.encoder(substance_smiles)
+            except:
+                print((
+                    f"ERROR: Failed to generate selfies for molecule '{substance_index}' ",
+                    f"using fingerprint type '{fingerprint_type}' ",
+                    f"with smiles '{substance_smiles}'; skipping..."))
+                continue
+
+            try:
+                with torch.no_grad():
+                    substance_tokens = tokenizer(substance_selfies)
+                    input_ids = torch.tensor(substance_tokens.input_ids).to(device)
+                    model_output = model.forward(input_ids = input_ids)
+                    fingerprint = list(model_output.values())[0].mean(0)
+                    fingerprint = fingerprint.cpu().detach().numpy()
+            except:
+                print((
+                    f"ERROR: Failed to generate fingerprint for molecule '{index}' "
+                    f"using fingerprint type '{fingerprint_type}' "
+                    f"with smiles '{substance_smiles}'; skipping "))
+                continue
+        elif fingerprint_type in ["ECFP4", "APDP"]:
+            try:
+                fingerprint = molecule_to_fingerprint_array(
+                    substance,
+                    fingerprint_type,
+                    fingerprint_n_bits,
+                    verbose)
+            except:
+                print(f"WARNING: Unable to generate fingerprint for library molecule with index {substance_index}")
+                continue
+
         fingerprints.append(fingerprint)
 
         substance_info = {}
@@ -272,7 +295,8 @@ def generate_fingerprints_mol2(
         fields: Sequence[str] = ["_Name"],
         fingerprint_type: str = 'ECFP4',
         fingerprint_n_bits: int = 1024,
-        verbose=False):
+        device: str = 'cpu',
+        verbose: bool = False):
 
     """
     Generate fingerprints for substances in the library
@@ -280,6 +304,8 @@ def generate_fingerprints_mol2(
     Args:
         libray_path: path to library .mol2 file
         fields: fields in the library .mol2 file to be reported in the results
+        device: specify hardware accelerator for models that support it
+        verbose: verbose logging
         fingerprint_type: type of fingerprint to represent molecules for comparison
 
     Returns:
@@ -290,24 +316,63 @@ def generate_fingerprints_mol2(
     if not os.path.exists(library_path):
         raise ValueError(f"The library path '{library_path}' does not exist.")
 
-    valid_fingerprint_types = ["ECFP4", "APDP"]
-    if fingerprint_type not in valid_fingerprint_types:
+    valid_fingerprint_types = ('ECFP4', 'APDP', 'huggingface')
+    if not fingerprint_type.startswith(valid_fingerprint_types):
         raise ValueError((
-            f"Unrecognized fingerprint_type '{fingerprint_type}'. ",
+            f"Unrecognized fingerprint_type '{fingerprint_type}'. "
             f"Valid options are [{', '.join(valid_fingerprint_types)}]"))
+
+    if fingerprint_type.startswith("huggingface"):
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        import selfies
+        import torch
+        model_path = fingerprint_type[12:]
+
+        if verbose:
+            print(f"Loading huggingface model '{model_path}' onto device '{device}'...")
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(model_path).to(device)
 
     substances = []
     fingerprints = []
-    for substance_index, (start_line, substance) in enumerate(Mol2MolSupplier(library_path)):
-        try:
-            fingerprint = molecule_to_fingerprint_array(
-                substance,
-                fingerprint_type,
-                fingerprint_n_bits,
-                verbose)
-        except:
-            print(f"WARNING: Unable to generate fingerprint for library molecule with index {substance_index}")
-            continue
+    for substance_index, (start_line, substance) in enumerate(tqdm.tqdm(Mol2MolSupplier(library_path))):
+        if fingerprint_type.startswith("huggingface"):
+            substance_smiles = rdkit.Chem.MolToSmiles(substance)
+            try:
+                substance_selfies = selfies.encoder(substance_smiles)
+            except:
+                print((
+                    f"ERROR: Failed to generate selfies for molecule '{index}' "
+                    f"using fingerprint type '{fingerprint_type}' "
+                    f"with smiles '{substance_smiles}'; skipping..."))
+                continue
+
+            try:
+                with torch.no_grad():
+                    substance_tokens = tokenizer(substance_selfies)
+                    input_ids = torch.tensor(substance_tokens.input_ids).to(device)
+                    model_output = model.forward(input_ids = input_ids)
+                    fingerprint = list(model_output.values())[0].mean(0)
+                    fingerprint = fingerprint.cpu().detach().numpy()
+            except:
+                print((
+                    f"ERROR: Failed to generate fingerprint for molecule '{index}' "
+                    f"using fingerprint type '{fingerprint_type}' "
+                    f"with smiles '{substance_smiles}'; skipping "))
+                continue
+        elif fingerprint_type in ["ECFP4", "APDP"]:
+            try:
+                fingerprint = molecule_to_fingerprint_array(
+                    substance,
+                    fingerprint_type,
+                    fingerprint_n_bits,
+                    verbose)
+            except:
+                print(f"WARNING: Unable to generate fingerprint for library molecule with index {substance_index}")
+                continue
+        else:
+            print(f"ERROR: Unrecognized fingerprint_type {fingerprint_type}")
+
         fingerprints.append(fingerprint)
 
         substance_info = {}

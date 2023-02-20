@@ -9,7 +9,7 @@ setup(
     description='Machine learning methods for analyzing Morphological Profiling data',
     author="Matthew O'Meara",
     author_email="maom@umich.edu",
-    packages=['MPLearn',],
+    packages=['MPLearn', 'MPLearn.chemoinformatics'],
     install_requires=[
         'numpy>=1.12.1',
         'six>=1.10.0',

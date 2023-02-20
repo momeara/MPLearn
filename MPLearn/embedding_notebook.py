@@ -31,7 +31,6 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from shapely.prepared import prep
 
-import mysql.connector
 from . import view_cells
 
 def initialize_notebook():
@@ -501,6 +500,8 @@ def embedding_cell_images(
         height,
         verbose=False):
 
+    import mysql.connector
+    
     db_connector = mysql.conector.connect(
         option_files=database_options)
     db_cursor = db_connector.cursor()

@@ -174,21 +174,21 @@ def main(argv):
     ################
     if arguments.feature_columns is not None:
         feature_columns = pd.read_csv(arguments.feature_columns, sep="\t")
-        if arguments.verbose:
-            print("Loading '{}' feature columns".format(feature_columns.shape[0]))
     else:
         feature_columns = None
 
     dataset = []
     for dataset_path in arguments.dataset:
-        if arguments.verbose:
-            print("Reading in dataset '{}'...".format(dataset_path))
         if arguments.feature_columns is not None:
+            if arguments.verbose:
+                print(f"Reading {len(feature_columns)} columns from dataset '{dataset_path}' ...")
             dataset.append(pa.parquet.read_table(
                 source=dataset_path,
                 columns=feature_columns['feature'].to_list(),
             ).to_pandas().astype('float32'))
         else:
+            if arguments.verbose:
+                print(f"Reading all columns from dataset '{dataset_path}' ...")
             dataset.append(pa.parquet.read_table(
                 source=dataset_path,
             ).to_pandas().astype('float32'))

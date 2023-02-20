@@ -293,9 +293,9 @@ def main(argv):
                 f.write(f"substancce_id_field\t{arguments.substance_id_field}\n")
                 f.write(f"smiles_field\t{arguments.smiles_field}\n")
             f.write(f"fingerprint_type\t{arguments.fingerprint_type}\n")
-            if fingerprint_type == "ECFP4":
+            if arguments.fingerprint_type == "ECFP4":
                 f.write(f"fingerprint_n_bits\t{arguments.fingerprint_n_bits}\n")
-            elif fingerprint_type.startswith("huggingface"):
+            elif arguments.fingerprint_type.startswith("huggingface"):
                 f.write(f"device\t{arguments.device}\n")
             f.write(f"n_substances\n{len(fingerprints)}\n")
 
